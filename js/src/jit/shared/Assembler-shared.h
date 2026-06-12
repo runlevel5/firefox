@@ -30,14 +30,15 @@
 
 #if defined(JS_CODEGEN_ARM) || defined(JS_CODEGEN_ARM64) ||      \
     defined(JS_CODEGEN_MIPS64) || defined(JS_CODEGEN_LOONG64) || \
-    defined(JS_CODEGEN_WASM32) || defined(JS_CODEGEN_RISCV64)
+    defined(JS_CODEGEN_WASM32) || defined(JS_CODEGEN_RISCV64) || \
+    defined(JS_CODEGEN_PPC64)
 // Push return addresses callee-side.
 #  define JS_USE_LINK_REGISTER
 #endif
 
 #if defined(JS_CODEGEN_MIPS64) || defined(JS_CODEGEN_ARM64) ||    \
     defined(JS_CODEGEN_LOONG64) || defined(JS_CODEGEN_RISCV64) || \
-    defined(JS_CODEGEN_ARM)
+    defined(JS_CODEGEN_ARM) || defined(JS_CODEGEN_PPC64)
 // JS_CODELABEL_LINKMODE gives labels additional metadata
 // describing how Bind() should patch them.
 #  define JS_CODELABEL_LINKMODE
@@ -639,6 +640,14 @@ class MemoryAccessDesc {
     loadOp_ = Widen;
   }
 };
+
+// Zero-extend an index from signed Int32 to Int64.
+//
+// Describes when an index register must be zero-extended to 64-bit before
+// performing memory accesses. Used for architectures which implicitly
+// sign-extend registers to 64-bit when performing 32-bit operations, e.g.
+// PPC64.
+enum class ZeroExtendIndex : bool { No, Yes };
 
 }  // namespace wasm
 
