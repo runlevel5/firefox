@@ -1,3 +1,4 @@
+// |jit-test| skip-if: !wasmSimdEnabled()
 // Regression test for PPC64 i64x2.extmul_{low,high}_i32x4_{s,u} when the
 // Ion register allocator picks dest == rhs.
 //

@@ -1,3 +1,4 @@
+// |jit-test| skip-if: !wasmSimdEnabled()
 // Regression test for a PPC64-specific wasm Ion crash in
 // CodeGenerator::visitWasmReduceAndBranchSimd128 — it called
 // LBlock::label() directly on the branch targets without going through

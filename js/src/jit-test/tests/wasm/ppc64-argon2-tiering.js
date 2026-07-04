@@ -1,3 +1,4 @@
+// |jit-test| skip-if: !wasmSimdEnabled()
 // Test for wasm tiering correctness with argon2-style SIMD computation.
 // The argon2 fBlaMka function uses i64x2.extmul_low_i32x4_u, i64x2.shl,
 // i64x2.add, v128.xor, v128.or, i64x2.shr_u, and i8x16.shuffle.
