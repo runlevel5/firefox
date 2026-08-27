@@ -3989,8 +3989,9 @@ bool AsyncPanZoomController::AttemptScroll(
 
   // If there is no APZC later in the handoff chain that accepted the
   // overscroll, try to accept it ourselves. We only accept it if we
-  // are pannable.
-  if (ScrollSourceAllowsOverscroll(aOverscrollHandoffState.mScrollSource)) {
+  // are pannable and we were allowed to scroll in this input block.
+  if (scrollThisApzc &&
+      ScrollSourceAllowsOverscroll(aOverscrollHandoffState.mScrollSource)) {
     APZC_LOG("%p taking overscroll during panning\n", this);
 
     ParentLayerPoint prevVisualOverscroll = GetOverscrollAmount();
@@ -4346,8 +4347,11 @@ bool AsyncPanZoomController::CallDispatchScroll(
     }
   }
 
-  return treeManagerLocal->DispatchScroll(this, aStartPoint, endPoint,
-                                          aOverscrollHandoffState);
+  const ParentLayerPoint delta = aEndPoint - endPoint;
+  const bool result = treeManagerLocal->DispatchScroll(
+      this, aStartPoint, endPoint, aOverscrollHandoffState);
+  aEndPoint = endPoint + delta;
+  return result;
 }
 
 void AsyncPanZoomController::RecordScrollPayload(const TimeStamp& aTimeStamp) {

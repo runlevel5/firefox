@@ -100,6 +100,7 @@ import org.mozilla.fenix.termsofuse.store.DefaultTermsOfUsePromptRepository
 import org.mozilla.fenix.utils.Settings
 import org.mozilla.fenix.utils.isLargeScreenSize
 import org.mozilla.fenix.wifi.WifiConnectionMonitor
+import org.mozilla.gecko.search.SearchWidgetProvider
 
 private const val AMO_COLLECTION_MAX_CACHE_AGE = 2 * 24 * 60L // Two days in minutes
 
@@ -463,7 +464,7 @@ class Components(
             it.register(
                 VoiceSearchAIControlFeature(
                     settings = settings,
-                    onUpdateWidget = { VoiceSearchAIControlFeature.updateWidget(context) },
+                    onUpdateWidget = { SearchWidgetProvider.updateAllWidgets(context) },
                 )
             )
         }

@@ -811,7 +811,7 @@ toolbarbutton[constrain-size="true"][cui-areatype="panel"] > .toolbarbutton-badg
 
 /* FIXME(bug 2061145): Remove :has() usage, use showing-* selectors instead */
 /* stylelint-disable-next-line stylelint-plugin-mozilla/no-has-selector */
-:root[fxastatus="not_configured"]
+:root[fxastatus="not_configured"]:not([fxadisabled="true"])
   #appMenu-mainView:not([showing-fxa-menu-message], [showing-default-cta-menu-message]):not(:has(#appMenu-update-banner:not([hidden]))) {
   & #appMenu-fxa-status2 {
     display: none;

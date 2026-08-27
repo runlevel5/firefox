@@ -262,7 +262,8 @@ class SearchEngineFragment : PreferenceFragmentCompat(), SystemInsetsPaddedFragm
      *
      * The preference is only visible when the Nimbus-backed [Settings.googleLensIntegrationEnabled] flag is on. Its
      * checked state reflects the local-only [Settings.googleLensIntegrationUserEnabled] override and changes are
-     * persisted via [SharedPreferenceUpdater].
+     * persisted via [SharedPreferenceUpdater]. Changing it also redraws the search widgets, which show a Lens button
+     * only while the setting is on.
      *
      * @param preference The [SwitchWithCaptionPreference] for the Google Lens search setting.
      */
@@ -271,7 +272,14 @@ class SearchEngineFragment : PreferenceFragmentCompat(), SystemInsetsPaddedFragm
         preference.isVisible = requireContext().components.settings.googleLensIntegrationEnabled
         preference.caption = getString(R.string.preferences_google_lens_availability_caption)
         preference.isChecked = requireContext().components.settings.googleLensIntegrationUserEnabled
-        preference.onPreferenceChangeListener = SharedPreferenceUpdater()
+        preference.onPreferenceChangeListener =
+            object : SharedPreferenceUpdater() {
+                override fun onPreferenceChange(preference: Preference, newValue: Any?): Boolean {
+                    val persisted = super.onPreferenceChange(preference, newValue)
+                    updateAllWidgets(requireContext())
+                    return persisted
+                }
+            }
     }
 
     override fun onPreferenceTreeClick(preference: Preference): Boolean {

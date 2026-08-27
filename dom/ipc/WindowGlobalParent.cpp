@@ -1876,10 +1876,6 @@ void WindowGlobalParent::ActorDestroy(ActorDestroyReason aWhy) {
 
   if (GetBrowsingContext()->IsTopContent() &&
       !mDocumentPrincipal->SchemeIs("about")) {
-    // Record the page load
-    uint32_t pageLoaded = 1;
-    glean::mixed_content::unblock_counter.AccumulateSingleSample(pageLoaded);
-
     // Record the mixed content status of the docshell in Telemetry
     enum {
       NO_MIXED_CONTENT = 0,  // There is no Mixed Content on the page
@@ -2258,17 +2254,9 @@ WindowGlobalParent::AllocPDigitalCredentialParent() {
 }
 
 #ifdef ACCESSIBILITY
-a11y::PDocAccessibleParent* WindowGlobalParent::AllocPDocAccessibleParent(
-    const uint64_t&, const bool&) {
-  // Reference freed in DeallocPDocAccessibleParent.
-  return a11y::DocAccessibleParent::New().take();
-}
-
-bool WindowGlobalParent::DeallocPDocAccessibleParent(
-    a11y::PDocAccessibleParent* aActor) {
-  // Free reference from AllocPDocAccessibleParent.
-  static_cast<a11y::DocAccessibleParent*>(aActor)->Release();
-  return true;
+already_AddRefed<a11y::PDocAccessibleParent>
+WindowGlobalParent::AllocPDocAccessibleParent(const uint64_t&, const bool&) {
+  return a11y::DocAccessibleParent::New();
 }
 
 mozilla::ipc::IPCResult WindowGlobalParent::RecvPDocAccessibleConstructor(

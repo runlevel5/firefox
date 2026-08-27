@@ -58,21 +58,6 @@ async function waitForUrlLoad(url) {
   await BrowserTestUtils.browserLoaded(browser, false, url);
 }
 
-/**
- * Waits for the CFR doorhanger opened by a routed message, and takes it down.
- * Showing the doorhanger is asynchronous, so waitForPopupEvent is used rather
- * than waitForEvent to also cover the case where the panel is already open.
- */
-async function hideCFRDoorhanger() {
-  await BrowserTestUtils.waitForPopupEvent(PopupNotifications.panel, "shown");
-  Assert.ok(
-    PopupNotifications.getNotification("contextual-feature-recommendation"),
-    "The CFR doorhanger is shown"
-  );
-  CFRPageActions.clearRecommendations();
-  await BrowserTestUtils.waitForPopupEvent(PopupNotifications.panel, "hidden");
-}
-
 async function waitForCalloutScreen(target, screenId) {
   await BrowserTestUtils.waitForMutationCondition(
     target,

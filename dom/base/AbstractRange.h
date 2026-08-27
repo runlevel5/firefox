@@ -241,19 +241,29 @@ class AbstractRange : public nsISupports,
 
   void Init(nsINode* aNode);
 
+  friend auto format_as(const AbstractRange& aRange) {
+    if (aRange.MayCrossShadowBoundary()) {
+      return fmt::format(
+          "{{ MayCrossShadowBoundaryStartRef()={}, mIsGenerated={}, "
+          "mCalledByJS={}, mIsDynamicRange={} }}",
+          aRange.Collapsed()
+              ? fmt::format("MayCrossShadowBoundaryEndRef()={}",
+                            aRange.MayCrossShadowBoundaryStartRef())
+              : fmt::format("{}, MayCrossShadowBoundaryEndRef()={}",
+                            aRange.MayCrossShadowBoundaryStartRef(),
+                            aRange.MayCrossShadowBoundaryEndRef()),
+          aRange.mIsGenerated, aRange.mIsPositioned, aRange.mIsDynamicRange);
+    }
+    return fmt::format(
+        "{{ mStart={}, mIsGenerated={}, mCalledByJS={}, mIsDynamicRange={} }}",
+        aRange.Collapsed()
+            ? fmt::format("mEnd={}", aRange.mStart)
+            : fmt::format("{}, mEnd={}", aRange.mStart, aRange.mEnd),
+        aRange.mIsGenerated, aRange.mIsPositioned, aRange.mIsDynamicRange);
+  }
   friend std::ostream& operator<<(std::ostream& aStream,
                                   const AbstractRange& aRange) {
-    if (aRange.Collapsed()) {
-      aStream << "{ mStart=mEnd=" << aRange.mStart;
-    } else {
-      aStream << "{ mStart=" << aRange.mStart << ", mEnd=" << aRange.mEnd;
-    }
-    return aStream << ", mIsGenerated="
-                   << (aRange.mIsGenerated ? "true" : "false")
-                   << ", mCalledByJS="
-                   << (aRange.mIsPositioned ? "true" : "false")
-                   << ", mIsDynamicRange="
-                   << (aRange.mIsDynamicRange ? "true" : "false") << " }";
+    return aStream << format_as(aRange);
   }
 
   /**

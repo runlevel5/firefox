@@ -898,6 +898,16 @@ ${
     return this.#sapName;
   }
 
+  /**
+   * Whether this is a bar dedicated to search.
+   *
+   * @see {UrlbarShared.isSearchbarSAP}
+   * @type {boolean}
+   */
+  get isSearchbarSAP() {
+    return UrlbarShared.isSearchbarSAP(this.#sapName);
+  }
+
   get smartbarAction() {
     return /** @type {SmartbarAction} */ (
       this.getAttribute("smartbar-action") || this.#smartbarAction

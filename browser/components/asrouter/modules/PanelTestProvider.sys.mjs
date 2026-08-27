@@ -2899,6 +2899,27 @@ const MESSAGES = () => [
     },
   },
   {
+    id: "INFOBAR_ACTION_86",
+    groups: [],
+    targeting: "false",
+    template: "infobar",
+    content: {
+      type: "global",
+      text: { string_id: "default-browser-notification-message" },
+      buttons: [
+        {
+          label: { string_id: "default-browser-notification-button" },
+          primary: true,
+          accessKey: "O",
+          action: {
+            type: "SET_DEFAULT_BROWSER",
+          },
+        },
+      ],
+    },
+    trigger: { id: "defaultBrowserCheck" },
+  },
+  {
     id: "TEST_PROFILE_SPOTLIGHT",
     groups: [],
     targeting: "canCreateSelectableProfiles",

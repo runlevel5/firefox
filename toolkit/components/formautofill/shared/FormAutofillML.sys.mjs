@@ -8,7 +8,7 @@ import {
 } from "chrome://global/content/ml/EngineProcess.sys.mjs";
 
 import { FormAutofillUtils } from "resource://gre/modules/shared/FormAutofillUtils.sys.mjs";
-import { MLEngineParent } from "resource://gre/actors/MLEngineParent.sys.mjs";
+import { MLEngineParent } from "moz-src:///toolkit/components/ml/actors/MLEngineParent.sys.mjs";
 
 // Every engine's `timeoutMS` comes from
 // `extensions.formautofill.useml.timeoutMS` and is applied in `#ensureEngines`,

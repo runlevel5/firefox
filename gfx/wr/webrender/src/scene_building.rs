@@ -50,8 +50,7 @@ use api::channel::{unbounded_channel, Receiver, Sender};
 use api::units::*;
 use crate::image_tiling::simplify_repeated_primitive;
 use api::prim_geometry::{
-    conic_gradient_prim, linear_gradient_prim, process_repeat_size,
-    radial_gradient_prim,
+    conic_gradient_prim, linear_gradient_prim, radial_gradient_prim,
 };
 use crate::box_shadow::BLUR_SAMPLE_SCALE;
 use crate::clip::{ClipIntern, ClipItemKey, ClipItemKeyKind, ClipStore};
@@ -78,8 +77,7 @@ use crate::prim_store::rectangle::RectanglePrim;
 use crate::prim_store::backdrop::{BackdropCapture, BackdropRender};
 use crate::prim_store::borders::ImageBorder;
 use crate::prim_store::gradient::{
-    GradientStopKey, optimize_radial_gradient, apply_gradient_local_clip,
-    optimize_linear_gradient,
+    GradientStopKey,
 };
 use crate::prim_store::image::{Image, StretchSizeKey, YuvImage};
 use crate::prim_store::line_dec::LineDecoration;
@@ -1290,7 +1288,7 @@ impl<'a> SceneBuilder<'a> {
         &mut self,
         common: &CommonItemProperties,
         bounds: Option<LayoutRect>,
-    ) -> (LayoutPrimitiveInfo, LayoutRect, SpatialNodeIndex, ClipNodeId) {
+    ) -> (LayoutPrimitiveInfo, SpatialNodeIndex, ClipNodeId) {
         let spatial_node_index = self.get_space(common.spatial_id);
 
         // If no bounds rect is given, default to clip rect. The external
@@ -1300,8 +1298,6 @@ impl<'a> SceneBuilder<'a> {
         // `SpaceSnapper`).
         let clip_rect = common.clip_rect;
         let prim_rect = bounds.unwrap_or(clip_rect);
-        let unsnapped_rect = prim_rect;
-
 
         let clip_node_id = self.get_clip_node(
             common.clip_chain_id,
@@ -1319,14 +1315,14 @@ impl<'a> SceneBuilder<'a> {
             transformed_aa_edges: EdgeMask::all(),
         };
 
-        (layout, unsnapped_rect, spatial_node_index, clip_node_id)
+        (layout, spatial_node_index, clip_node_id)
     }
 
     fn process_common_properties_with_bounds(
         &mut self,
         common: &CommonItemProperties,
         bounds: LayoutRect,
-    ) -> (LayoutPrimitiveInfo, LayoutRect, SpatialNodeIndex, ClipNodeId) {
+    ) -> (LayoutPrimitiveInfo, SpatialNodeIndex, ClipNodeId) {
         self.process_common_properties(
             common,
             Some(bounds),
@@ -1349,7 +1345,7 @@ impl<'a> SceneBuilder<'a> {
                     return;
                 }
 
-                let (layout, _, spatial_node_index, clip_node_id) = self.process_common_properties_with_bounds(
+                let (layout, spatial_node_index, clip_node_id) = self.process_common_properties_with_bounds(
                     &info.common,
                     info.bounds,
                 );
@@ -1373,13 +1369,13 @@ impl<'a> SceneBuilder<'a> {
                     return;
                 }
 
-                let (layout, unsnapped_rect, spatial_node_index, clip_node_id) = self.process_common_properties_with_bounds(
+                let (layout, spatial_node_index, clip_node_id) = self.process_common_properties_with_bounds(
                     &info.common,
                     info.bounds,
                 );
 
                 let stretch_size = process_image_stretch_size(
-                    &unsnapped_rect,
+                    &layout.rect,
                     info.stretch_size,
                 );
 
@@ -1402,7 +1398,7 @@ impl<'a> SceneBuilder<'a> {
                     return;
                 }
 
-                let (layout, _, spatial_node_index, clip_node_id) = self.process_common_properties_with_bounds(
+                let (layout, spatial_node_index, clip_node_id) = self.process_common_properties_with_bounds(
                     &info.common,
                     info.bounds,
                 );
@@ -1431,7 +1427,7 @@ impl<'a> SceneBuilder<'a> {
                 // are subtle interactions between the primitive origin and the glyph offset
                 // which appear to be significant (presumably due to some sort of accumulated
                 // error throughout the layers). We should fix this at some point.
-                let (layout, _, spatial_node_index, clip_node_id) = self.process_common_properties_with_bounds(
+                let (layout, spatial_node_index, clip_node_id) = self.process_common_properties_with_bounds(
                     &info.common,
                     info.bounds,
                 );
@@ -1450,10 +1446,12 @@ impl<'a> SceneBuilder<'a> {
             DisplayItem::Rectangle(ref info) => {
                 tracy_rs::profile_scope!("rect");
 
-                let (layout, _, spatial_node_index, clip_node_id) = self.process_common_properties_with_bounds(
+                let (mut layout, spatial_node_index, clip_node_id) = self.process_common_properties_with_bounds(
                     &info.common,
                     info.bounds,
                 );
+
+                layout.transformed_aa_edges &= info.transformed_aa_edges;
 
                 self.add_primitive(
                     spatial_node_index,
@@ -1509,7 +1507,7 @@ impl<'a> SceneBuilder<'a> {
             DisplayItem::Line(ref info) => {
                 tracy_rs::profile_scope!("line");
 
-                let (layout, _, spatial_node_index, clip_node_id) = self.process_common_properties_with_bounds(
+                let (layout, spatial_node_index, clip_node_id) = self.process_common_properties_with_bounds(
                     &info.common,
                     info.area,
                 );
@@ -1527,194 +1525,93 @@ impl<'a> SceneBuilder<'a> {
             DisplayItem::Gradient(ref info) => {
                 tracy_rs::profile_scope!("gradient");
 
-                if !info.gradient.is_valid() {
-                    return;
-                }
-
-                let (mut layout, unsnapped_rect, spatial_node_index, clip_node_id) = self.process_common_properties_with_bounds(
+                let (layout, spatial_node_index, clip_node_id) = self.process_common_properties_with_bounds(
                     &info.common,
                     info.bounds,
                 );
 
-                let mut tile_size = process_repeat_size(
-                    &layout.rect,
-                    &unsnapped_rect,
+                if let Some(prim_key_kind) = linear_gradient_prim(
+                    layout.rect,
+                    info.gradient.start_point,
+                    info.gradient.end_point,
+                    read_gradient_stops(item.gradient_stops()),
+                    info.gradient.extend_mode,
                     info.tile_size,
-                );
-
-                let stops = read_gradient_stops(item.gradient_stops());
-                let mut start = info.gradient.start_point;
-                let mut end = info.gradient.end_point;
-                // Run the simplification + clip pass; the fast-path two-stop
-                // segment decomposition that used to run here now happens at
-                // prepare time so segments tile against the snapped prim_rect
-                // (see `decompose_axis_aligned_gradient`).
-                optimize_linear_gradient(
-                    &mut layout.rect,
-                    &mut tile_size,
                     info.tile_spacing,
-                    &layout.clip_rect,
-                    &mut start,
-                    &mut end,
-                );
-
-                if !tile_size.ceil().is_empty() {
-                    if let Some(prim_key_kind) = linear_gradient_prim(
-                        layout.rect,
-                        start,
-                        end,
-                        stops,
-                        info.gradient.extend_mode,
-                        tile_size,
-                        info.tile_spacing,
-                        None,
-                    ) {
-                        self.add_primitive(
-                            spatial_node_index,
-                            clip_node_id,
-                            &layout,
-                            prim_key_kind,
-                        );
-                    }
+                    None,
+                ) {
+                    self.add_primitive(
+                        spatial_node_index,
+                        clip_node_id,
+                        &layout,
+                        prim_key_kind,
+                    );
                 }
             }
             DisplayItem::RadialGradient(ref info) => {
                 tracy_rs::profile_scope!("radial");
 
-                if !info.gradient.is_valid() {
-                    return;
-                }
-
-                let (mut layout, unsnapped_rect, spatial_node_index, clip_node_id) = self.process_common_properties_with_bounds(
+                let (mut layout, spatial_node_index, clip_node_id) = self.process_common_properties_with_bounds(
                     &info.common,
                     info.bounds,
                 );
 
-                let mut center = info.gradient.center;
+                layout.transformed_aa_edges &= info.transformed_aa_edges;
 
-                let stops = read_gradient_stops(item.gradient_stops());
-
-                let mut tile_size = process_repeat_size(
-                    &layout.rect,
-                    &unsnapped_rect,
-                    info.tile_size,
-                );
-
-                let mut prim_rect = layout.rect;
-                let mut tile_spacing = info.tile_spacing;
-                let mut aa_mask = EdgeMask::all();
-                optimize_radial_gradient(
-                    &mut prim_rect,
-                    &mut tile_size,
-                    &mut center,
-                    &mut tile_spacing,
-                    &mut aa_mask,
-                    &layout.clip_rect,
-                    info.gradient.radius,
-                    info.gradient.end_offset,
+                let prim_key_kind = radial_gradient_prim(
+                    layout.rect,
+                    info.gradient.center,
+                    info.gradient.start_offset * info.gradient.radius.width,
+                    info.gradient.end_offset * info.gradient.radius.width,
+                    info.gradient.radius.width / info.gradient.radius.height,
+                    read_gradient_stops(item.gradient_stops()),
                     info.gradient.extend_mode,
-                    &stops,
-                    &mut |solid_rect, color, aa_mask| {
-                        self.add_primitive(
-                            spatial_node_index,
-                            clip_node_id,
-                            &LayoutPrimitiveInfo {
-                                rect: *solid_rect,
-                                aligned_aa_edges: layout.aligned_aa_edges & aa_mask,
-                                transformed_aa_edges: layout.transformed_aa_edges & aa_mask,
-                                .. layout
-                            },
-                            RectanglePrim { color: PropertyBinding::Value(color) },
-                        );
-                    }
+                    info.tile_size,
+                    info.tile_spacing,
+                    None,
                 );
 
-                layout.aligned_aa_edges &= aa_mask;
-                layout.transformed_aa_edges &= aa_mask;
-
-                // TODO: radial_gradient_prim already calls
-                // this, but it leaves the info variable that is
-                // passed to add_primitive unmodified
-                // which can cause issues.
-                simplify_repeated_primitive(&tile_size, &mut tile_spacing, &mut prim_rect);
-
-                if !tile_size.ceil().is_empty() {
-                    layout.rect = prim_rect;
-                    let prim_key_kind = radial_gradient_prim(
-                        layout.rect,
-                        center,
-                        info.gradient.start_offset * info.gradient.radius.width,
-                        info.gradient.end_offset * info.gradient.radius.width,
-                        info.gradient.radius.width / info.gradient.radius.height,
-                        stops,
-                        info.gradient.extend_mode,
-                        tile_size,
-                        tile_spacing,
-                        None,
-                    );
-
-                    self.add_primitive(
-                        spatial_node_index,
-                        clip_node_id,
-                        &layout,
-                        prim_key_kind,
-                    );
-                }
+                self.add_primitive(
+                    spatial_node_index,
+                    clip_node_id,
+                    &layout,
+                    prim_key_kind,
+                );
             }
             DisplayItem::ConicGradient(ref info) => {
                 tracy_rs::profile_scope!("conic");
 
-                if !info.gradient.is_valid() {
-                    return;
-                }
-
-                let (mut layout, unsnapped_rect, spatial_node_index, clip_node_id) = self.process_common_properties_with_bounds(
+                let (layout, spatial_node_index, clip_node_id) = self.process_common_properties_with_bounds(
                     &info.common,
                     info.bounds,
                 );
 
-                let tile_size = process_repeat_size(
-                    &layout.rect,
-                    &unsnapped_rect,
+                let prim_key_kind = conic_gradient_prim(
+                    layout.rect,
+                    info.gradient.center,
+                    info.gradient.angle,
+                    info.gradient.start_offset,
+                    info.gradient.end_offset,
+                    read_gradient_stops(item.gradient_stops()),
+                    info.gradient.extend_mode,
                     info.tile_size,
+                    info.tile_spacing,
+                    None,
                 );
 
-                let offset = apply_gradient_local_clip(
-                    &mut layout.rect,
-                    &tile_size,
-                    &info.tile_spacing,
-                    &layout.clip_rect,
+                self.add_primitive(
+                    spatial_node_index,
+                    clip_node_id,
+                    &layout,
+                    prim_key_kind,
                 );
-                let center = info.gradient.center + offset;
-
-                if !tile_size.ceil().is_empty() {
-                    let prim_key_kind = conic_gradient_prim(
-                        layout.rect,
-                        center,
-                        info.gradient.angle,
-                        info.gradient.start_offset,
-                        info.gradient.end_offset,
-                        read_gradient_stops(item.gradient_stops()),
-                        info.gradient.extend_mode,
-                        tile_size,
-                        info.tile_spacing,
-                        None,
-                    );
-
-                    self.add_primitive(
-                        spatial_node_index,
-                        clip_node_id,
-                        &layout,
-                        prim_key_kind,
-                    );
-                }
             }
             DisplayItem::BoxShadow(ref info) => {
                 tracy_rs::profile_scope!("box_shadow");
 
-                let (layout, _, spatial_node_index, clip_node_id) = self.process_common_properties_with_bounds(
+                let (layout, spatial_node_index, clip_node_id) = self.process_common_properties_with_bounds(
                     &info.common,
-                    info.box_bounds,
+                    info.bounds,
                 );
 
                 self.add_box_shadow(
@@ -1724,7 +1621,7 @@ impl<'a> SceneBuilder<'a> {
                     &info.offset,
                     info.color,
                     info.blur_radius,
-                    info.spread_radius,
+                    info.spread_amount,
                     info.border_radius,
                     info.shadow_radius,
                     info.clip_mode,
@@ -1741,7 +1638,7 @@ impl<'a> SceneBuilder<'a> {
                     }
                 }
 
-                let (layout, _, spatial_node_index, clip_node_id) = self.process_common_properties_with_bounds(
+                let (layout, spatial_node_index, clip_node_id) = self.process_common_properties_with_bounds(
                     &info.common,
                     info.bounds,
                 );
@@ -1809,7 +1706,7 @@ impl<'a> SceneBuilder<'a> {
             DisplayItem::BackdropFilter(ref info) => {
                 tracy_rs::profile_scope!("backdrop");
 
-                let (layout, _, spatial_node_index, clip_node_id) = self.process_common_properties(
+                let (layout, spatial_node_index, clip_node_id) = self.process_common_properties(
                     &info.common,
                     None,
                 );
@@ -4090,13 +3987,12 @@ fn filter_datas_for_compositing(
 }
 
 /// Image-specific stretch-size discriminator. Decided per-axis: if the
-/// gecko-specified `repeat_size` matches the unsnapped prim rect on
-/// that axis (within an FP-noise epsilon), the axis is flagged
-/// `fills_*` and the effective extent is resolved against the snapped
-/// prim rect at frame-build. Otherwise the explicit per-axis value is
-/// stored verbatim. Per-axis (rather than all-or-nothing) preserves the
-/// old `process_repeat_size` behaviour where a width-matching tile with
-/// a non-matching height still picks up the snapped prim width.
+/// gecko-specified `repeat_size` matches the prim rect on that axis (within an
+/// FP-noise epsilon), the axis is flagged `fills_*` and the effective extent is
+/// resolved against the snapped prim rect at frame-build. Otherwise the explicit
+/// per-axis value is stored verbatim. Per-axis rather than all-or-nothing, which
+/// matches `resolve_tile_size`: there too a width-matching tile with a
+/// non-matching height picks up the prim width on the axis that matches.
 fn process_image_stretch_size(
     unsnapped_rect: &LayoutRect,
     repeat_size: LayoutSize,

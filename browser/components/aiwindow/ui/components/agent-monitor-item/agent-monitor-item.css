@@ -20,6 +20,20 @@
   display: flex;
   align-items: center;
   gap: var(--space-small);
+  justify-content: space-between;
+}
+
+.monitor-card-head-left {
+  display: flex;
+  gap: var(--space-small);
+  flex: 1;
+  min-width: 0;
+}
+
+.monitor-card-head-right {
+  display: flex;
+  gap: var(--space-small);
+  align-items: center;
 }
 
 .spacer {
@@ -42,6 +56,7 @@
   flex: 1;
   min-width: 0;
   overflow: hidden;
+  contain: inline-size;
 }
 
 .monitor-card-name {

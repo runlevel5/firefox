@@ -552,7 +552,7 @@ def select_tasks_to_lambda(config, tasks):
     all youtube-playback tests (including power)
     all vpl (video-playback-latency) tests
     all pageload tests (ideally fenix/CaR/ChR)
-    jetstream2/jetstream3 benchmarks
+    jetstream3 benchmarks
     background/foreground resource tests (browsertime-power idle/idle-bg)
     trr-* performance tests
 
@@ -570,7 +570,6 @@ def select_tasks_to_lambda(config, tasks):
         "youtube-playback-h264-720p60",
         "youtube-playback-vp9-720p60",
         "tp6m",
-        "jetstream2",
         "jetstream3",
         "browsertime-power",
         "browsertime-trr-performance",
@@ -581,7 +580,6 @@ def select_tasks_to_lambda(config, tasks):
         "youtube-playback-h264-sfr",
         "youtube-playback-h264-720p60",
         "youtube-playback-vp9-720p60",
-        "jetstream2",
         "jetstream3",
         "browsertime-power",
         "browsertime-trr-performance",

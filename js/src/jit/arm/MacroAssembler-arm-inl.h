@@ -286,6 +286,11 @@ void MacroAssembler::xorPtr(Imm32 imm, Register src, Register dest) {
   ma_eor(imm, src, dest, scratch);
 }
 
+void MacroAssembler::nor32(Imm32 imm, Register src, Register dest) {
+  or32(imm, src, dest);
+  not32(dest);
+}
+
 // ===============================================================
 // Swap instructions
 

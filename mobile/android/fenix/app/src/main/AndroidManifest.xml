@@ -665,6 +665,13 @@
             android:excludeFromRecents="true"
             />
 
+        <activity android:name=".widget.LensSearchActivity"
+            android:theme="@style/Theme.LensCamera"
+            android:taskAffinity=""
+            android:excludeFromRecents="true"
+            android:exported="false"
+            />
+
         <activity android:name="mozilla.components.feature.qr.QrScanActivity"
             android:theme="@style/Theme.AppCompat.Translucent"
             android:exported="false"

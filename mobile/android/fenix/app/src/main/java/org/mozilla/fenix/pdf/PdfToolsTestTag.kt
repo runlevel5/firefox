@@ -13,4 +13,9 @@ internal object PdfToolsTestTag {
     const val DOWNLOAD_BUTTON = "$PDF_TOOLS.downloadButton"
     const val PRINT_BUTTON = "$PDF_TOOLS.printButton"
     const val SHARE_BUTTON = "$PDF_TOOLS.shareButton"
+    const val SIGNATURE_DIALOG = "$PDF_TOOLS.signatureDialog"
+    const val SIGNATURE_INPUT = "$PDF_TOOLS.signatureInput"
+    const val SIGNATURE_CLOSE_BUTTON = "$PDF_TOOLS.signatureCloseButton"
+    const val SIGNATURE_CLEAR_BUTTON = "$PDF_TOOLS.signatureClearButton"
+    const val SIGNATURE_ADD_BUTTON = "$PDF_TOOLS.signatureAddButton"
 }

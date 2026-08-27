@@ -123,26 +123,27 @@ export class SmartwindowGroupTabsCard extends MozLitElement {
     event.preventDefault();
   }
 
-  #onSuggestionFocus(event, suggestion) {
-    if (event.currentTarget.hasAttribute("refocused-by-panel")) {
-      return;
-    }
+  #emitPreview(event, detail, source) {
     this.#emit("preview", {
-      id: suggestion.id,
+      ...detail,
       anchor: event.currentTarget,
-      source: "focus",
+      source,
     });
   }
 
-  #onRowKeyDown(event, suggestion = null) {
+  #onRowFocus(event, detail) {
+    if (event.currentTarget.hasAttribute("refocused-by-panel")) {
+      return;
+    }
+    this.#emitPreview(event, detail, "focus");
+  }
+
+  #onRowKeyDown(event, detail = null) {
     if (event.key === "ArrowRight" || event.key === "ArrowLeft") {
       event.preventDefault();
 
-      if (suggestion) {
-        this.#emit("preview-enter", {
-          id: suggestion.id,
-          anchor: event.currentTarget,
-        });
+      if (detail) {
+        this.#emit("preview-enter", { ...detail, anchor: event.currentTarget });
       } else {
         this.#emit("view-tab-groups", { anchor: event.currentTarget });
       }
@@ -159,16 +160,11 @@ export class SmartwindowGroupTabsCard extends MozLitElement {
         groupLabel: suggestion.label,
         tabCount: suggestion.tabInfos.length,
       })}
-      @mouseenter=${e =>
-        this.#emit("preview", {
-          id: suggestion.id,
-          anchor: e.currentTarget,
-          source: "hover",
-        })}
-      @focus=${e => this.#onSuggestionFocus(e, suggestion)}
+      @mouseenter=${e => this.#emitPreview(e, { id: suggestion.id }, "hover")}
+      @focus=${e => this.#onRowFocus(e, { id: suggestion.id })}
       @mouseleave=${() => this.#emit("preview-end")}
       @blur=${() => this.#emit("preview-end")}
-      @keydown=${e => this.#onRowKeyDown(e, suggestion)}
+      @keydown=${e => this.#onRowKeyDown(e, { id: suggestion.id })}
       @click=${() => this.#emit("create-one", { id: suggestion.id })}
     >
       ${this.#favicons(suggestion.tabInfos)}
@@ -268,10 +264,17 @@ export class SmartwindowGroupTabsCard extends MozLitElement {
               ? html`<button
                   type="button"
                   class="swgt-row swgt-close-duplicates"
+                  aria-expanded="false"
                   data-l10n-id="smartwindow-group-tabs-close-duplicates"
                   data-l10n-args=${JSON.stringify({
                     tabCount: this.duplicates,
                   })}
+                  @mouseenter=${e =>
+                    this.#emitPreview(e, { duplicates: true }, "hover")}
+                  @focus=${e => this.#onRowFocus(e, { duplicates: true })}
+                  @mouseleave=${() => this.#emit("preview-end")}
+                  @blur=${() => this.#emit("preview-end")}
+                  @keydown=${e => this.#onRowKeyDown(e, { duplicates: true })}
                   @click=${() => this.#emit("close-duplicates")}
                 ></button>`
               : nothing}`
@@ -282,16 +285,17 @@ export class SmartwindowGroupTabsCard extends MozLitElement {
 customElements.define("smartwindow-group-tabs-card", SmartwindowGroupTabsCard);
 
 /**
- * Flyout shown to the side of the row it belongs to. It lists either the tabs
- * of one suggested group (activating a tab switches to it) or, with
- * groupsListId set, the user's existing tab groups, which the tabbrowser's own
- * <tab-groups-list> renders and acts on. Each opening of that list gets its own
- * groupsListId, so a new <tab-groups-list> is built: it only reads the groups
- * when it is connected.
+ * Flyout shown to the side of the row it belongs to. It lists one of: the tabs
+ * of one suggested group, the duplicate tabs a close would remove (activating a
+ * tab in either switches to it), or, with groupsListId set, the user's existing
+ * tab groups, which the tabbrowser's own <tab-groups-list> renders and acts on.
+ * Each opening of that list gets its own groupsListId, so a new
+ * <tab-groups-list> is built: it only reads the groups when it is connected.
  */
 export class SmartwindowGroupTabsFlyout extends MozLitElement {
   static properties = {
     suggestion: { attribute: false },
+    duplicates: { attribute: false },
     groupsListId: { type: Number },
   };
 
@@ -360,25 +364,49 @@ export class SmartwindowGroupTabsFlyout extends MozLitElement {
       </div>`;
     }
 
+    if (this.duplicates?.length) {
+      return this.#tabList(this.duplicates, index =>
+        this.#emit("select-tab", { id: null, index })
+      );
+    }
+
     const suggestion = this.suggestion;
     if (!suggestion) {
       return nothing;
     }
+    return this.#tabList(
+      suggestion.tabInfos,
+      index => this.#emit("select-tab", { id: suggestion.id, index }),
+      suggestion.label
+    );
+  }
+
+  /**
+   * One row per tab, each switching to it.
+   *
+   * @param {object[]} tabInfos
+   * @param {Function} onSelect - Called with the row's position in the list.
+   * @param {string} [groupLabel] - Names the suggested group being previewed;
+   *   without one the list is the duplicate tabs.
+   * @returns {object} A Lit template.
+   */
+  #tabList(tabInfos, onSelect, groupLabel = "") {
     return html`<div
       class="swgt-flyout-list"
       role="group"
-      data-l10n-id="smartwindow-group-tabs-flyout-list"
-      data-l10n-args=${JSON.stringify({ groupLabel: suggestion.label })}
+      data-l10n-id=${groupLabel
+        ? "smartwindow-group-tabs-flyout-list"
+        : "smartwindow-group-tabs-duplicates-list"}
+      data-l10n-args=${groupLabel ? JSON.stringify({ groupLabel }) : nothing}
       @keydown=${e => this.#onKeyDown(e)}
     >
-      ${suggestion.tabInfos.map(
+      ${tabInfos.map(
         (info, index) =>
           html`<button
             type="button"
             class="swgt-flyout-tab"
             title=${info.title}
-            @click=${() =>
-              this.#emit("select-tab", { id: suggestion.id, index })}
+            @click=${() => onSelect(index)}
           >
             ${favicon(info)}
             <span class="swgt-flyout-tab-label">${info.title}</span>

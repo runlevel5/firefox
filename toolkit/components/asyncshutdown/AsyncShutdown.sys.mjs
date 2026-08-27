@@ -804,7 +804,10 @@ function Barrier(name) {
       }
 
       let blocker = {
-        trigger,
+        trigger: () => {
+          blocker.triggerTime = ChromeUtils.now();
+          trigger();
+        },
         promise,
         name,
         fetchState,
@@ -812,6 +815,8 @@ function Barrier(name) {
         // Time at which this blocker was registered, used as the start time of
         // the profiler marker emitted when the blocker is removed.
         addTime: ChromeUtils.now(),
+        // Time at which the barrier started waiting for this blocker.
+        triggerTime: null,
       };
 
       this._waitForMe.add(promise);
@@ -830,7 +835,7 @@ function Barrier(name) {
         // The wait has already started. The blocker should be
         // notified asap. We do it out of band as clients probably
         // expect `addBlocker` to return immediately.
-        Promise.resolve().then(trigger);
+        Promise.resolve().then(() => blocker.trigger());
       }
     },
 
@@ -1149,6 +1154,16 @@ Barrier.prototype = Object.freeze({
       { startTime: blocker.addTime },
       `${this._name}: ${blocker.name}`
     );
+
+    // The marker above spans from registration, which for most blockers is
+    // startup. Emit a second one covering only the wait.
+    if (blocker.triggerTime !== null) {
+      ChromeUtils.addProfilerMarker(
+        "AsyncShutdown blocker wait",
+        { startTime: blocker.triggerTime },
+        `${this._name}: ${blocker.name}`
+      );
+    }
 
     this._conditionToPromise.delete(condition);
     this._promiseToBlocker.delete(promise);

@@ -5875,6 +5875,29 @@ nsresult QuotaManager::EnsureStorageIsInitializedInternal() {
             // Fallback.
             ErrToDefaultOk<nsCOMPtr<mozIStorageConnection>>));
 
+    // OpenUnsharedDatabase only validates the SQLite header
+    // (page 1). Internal corruption (such as freelist inconsistency from
+    // an interrupted schema migration) passes the open check but breaks
+    // all subsequent storage operations. Run a quick integrity check to
+    // catch this class of corruption; if it fails, close and null the
+    // connection so the nuke-and-rebuild path below handles recovery.
+    // See bug 2065480 for details.
+    if (connection) {
+      QM_WARNONLY_TRY(DatabasePassesIntegrityCheck(*connection)
+                          .andThen([](bool ok) -> Result<Ok, nsresult> {
+                            return ok ? Result<Ok, nsresult>{Ok{}}
+                                      : Err(NS_ERROR_FILE_CORRUPTED);
+                          }),
+                      // Clean-up: called if DatabasePassesIntegrityCheck failed
+                      // or found that the database is corrupted (!ok)
+                      [&](const auto&) {
+                        // Reset the connection to force database file to be
+                        // recreated
+                        connection->Close();
+                        connection = nullptr;
+                      });
+    }
+
     bool storageFileWasCorrupted = false;
 
     if (!connection) {

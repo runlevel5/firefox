@@ -21,7 +21,7 @@ const lazy = XPCOMUtils.declareLazy({
  *   EngineCreateOptions,
  *   EngineOptions
  * } from "../../../../toolkit/components/ml/ml.d.ts"
- * @import { MLEngine } from "resource://gre/actors/MLEngineParent.sys.mjs"
+ * @import { MLEngine } from "moz-src:///toolkit/components/ml/actors/MLEngineParent.sys.mjs"
  * @typedef {Awaited<ReturnType<typeof lazy.createEngine>>} MLEngine
  */
 

@@ -60,11 +60,13 @@ open class FullScreenFeature(
             fullScreenChanged(observation.inFullScreen)
         }
 
-        // Consumers reset the window's display cutout mode when leaving fullscreen on the Android versions where it
-        // still has an effect, so the tab's viewport-fit has to be applied again even when it did not change.
-        val exitedFullScreen = inFullScreenChanged && !observation.inFullScreen
+        // Leaving fullscreen restores the display cutout mode from before it was entered, which misses a viewport-fit
+        // the page asked for while it was fullscreen. Apply that again, but only when the page asked for one.
+        val exitedFullScreenWithViewportFit =
+            inFullScreenChanged && !observation.inFullScreen && observation.layoutInDisplayCutoutMode != NO_VIEWPORT_FIT
         if (
-            observation.layoutInDisplayCutoutMode != previousObservation.layoutInDisplayCutoutMode || exitedFullScreen
+            observation.layoutInDisplayCutoutMode != previousObservation.layoutInDisplayCutoutMode ||
+                exitedFullScreenWithViewportFit
         ) {
             viewportFitChanged(observation.layoutInDisplayCutoutMode)
         }
@@ -87,6 +89,12 @@ open class FullScreenFeature(
     }
 }
 
+/**
+ * `WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_DEFAULT`, which cannot be referenced here because that
+ * field requires API 28 and this component supports API 26.
+ */
+private const val NO_VIEWPORT_FIT = 0
+
 /** Simple holder data class to keep a reference to the last values we observed. */
 private data class Observation(
     val tabId: String?,
@@ -106,5 +114,5 @@ private fun createDefaultObservation() =
     Observation(
         tabId = null,
         inFullScreen = false,
-        layoutInDisplayCutoutMode = 0,
+        layoutInDisplayCutoutMode = NO_VIEWPORT_FIT,
     )

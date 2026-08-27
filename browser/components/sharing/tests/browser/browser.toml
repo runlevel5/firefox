@@ -40,6 +40,8 @@ support-files = [ "!/browser/components/places/tests/browser/head.js"]
 ["browser_testSharePanelSendToDevice.js"]
 support-files = ["!/browser/base/content/test/sync/head.js"]
 
+["browser_testSharePanelTelemetry.js"]
+
 ["browser_testSharePanelWindowsShare.js"]
 run-if = [
   "os == 'win'",

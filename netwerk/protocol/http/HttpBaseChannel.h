@@ -1214,7 +1214,7 @@ nsresult HttpAsyncAborter<T>::AsyncCall(void (T::*funcPtr)(),
 
   RefPtr<nsRunnableMethod<T>> event =
       NewRunnableMethod("net::HttpAsyncAborter::AsyncCall", mThis, funcPtr);
-  rv = NS_DispatchToCurrentThread(event);
+  rv = DispatchToCurrent(event);
   if (NS_SUCCEEDED(rv) && retval) {
     *retval = event;
   }

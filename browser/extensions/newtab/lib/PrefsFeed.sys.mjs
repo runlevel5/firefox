@@ -131,6 +131,8 @@ export class PrefsFeed {
     this._prefs = new Prefs();
     // Buffers broadcast prefs during a SET_MULTIPLE_PREFS transaction; null otherwise.
     this._prefsTransaction = null;
+    // Mirrors what was last broadcast as `lockedPrefs`.
+    this._lockedPrefs = new Set();
     this.onExperimentUpdated = this.onExperimentUpdated.bind(this);
     this.onTrainhopExperimentUpdated =
       this.onTrainhopExperimentUpdated.bind(this);
@@ -165,6 +167,8 @@ export class PrefsFeed {
     this._mirrorSpaceOptOut(name, value);
     const prefItem = this._prefMap.get(name);
     if (prefItem) {
+      this.updateLockedPref(name);
+
       let action = "BroadcastToContent";
       if (prefItem.skipBroadcast) {
         action = "OnlyToMain";
@@ -194,6 +198,33 @@ export class PrefsFeed {
     if (isUserChange && this.inActivationWindowState) {
       this.trackActivationWindowPrefChange(name, value);
     }
+  }
+
+  /**
+   * Locking and unlocking a pref notifies its observers (see
+   * `Preferences::Lock`), so this runs for lock changes even when the value
+   * itself is unchanged.
+   *
+   * @param {string} name - The branch-relative pref name that changed.
+   */
+  updateLockedPref(name) {
+    const locked = this._prefs.locked(name);
+    if (locked === this._lockedPrefs.has(name)) {
+      return;
+    }
+
+    if (locked) {
+      this._lockedPrefs.add(name);
+    } else {
+      this._lockedPrefs.delete(name);
+    }
+
+    this.store.dispatch(
+      ac.BroadcastToContent({
+        type: at.PREF_CHANGED,
+        data: { name: "lockedPrefs", value: [...this._lockedPrefs] },
+      })
+    );
   }
 
   /**
@@ -740,6 +771,12 @@ export class PrefsFeed {
         this._setStringPref(values, key, defaultValue);
       }
     }
+
+    // Last, so it covers the prefs added to _prefMap above.
+    values.lockedPrefs = [...this._prefMap.keys()].filter(name =>
+      this._prefs.locked(name)
+    );
+    this._lockedPrefs = new Set(values.lockedPrefs);
 
     // Set the initial state of all prefs in redux
     this.store.dispatch(

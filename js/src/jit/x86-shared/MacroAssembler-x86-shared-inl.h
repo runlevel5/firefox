@@ -118,6 +118,11 @@ void MacroAssembler::xor32(const Address& src, Register dest) {
   xorl(Operand(src), dest);
 }
 
+void MacroAssembler::nor32(Imm32 imm, Register src, Register dest) {
+  or32(imm, src, dest);
+  not32(dest);
+}
+
 void MacroAssembler::clz32(Register src, Register dest, bool knownNotZero) {
   if (AssemblerX86Shared::HasLZCNT()) {
     lzcntl(src, dest);

@@ -1811,9 +1811,8 @@ void DocAccessible::DoInitialUpdate() {
         // In content processes, top level content documents are always
         // RootAccessibles.
         MOZ_ASSERT(IsRoot());
-        DocAccessibleChild* ipcDoc = IPCDoc();
-        if (!ipcDoc) {
-          ipcDoc = new DocAccessibleChild(this, wgc);
+        if (!IPCDoc()) {
+          RefPtr<DocAccessibleChild> ipcDoc = new DocAccessibleChild(this, wgc);
           MOZ_RELEASE_ASSERT(
               wgc->SendPDocAccessibleConstructor(ipcDoc, 0, IsPrintDoc()));
           // trying to recover from this failing is problematic
@@ -3382,7 +3381,8 @@ void DocAccessible::BindChildDocument(DocAccessible* aDocument) {
           dom::WindowGlobalChild* wgc =
               aDocument->DocumentNode()->GetWindowGlobalChild();
           MOZ_ASSERT(wgc);
-          DocAccessibleChild* ipcDoc = new DocAccessibleChild(aDocument, wgc);
+          RefPtr<DocAccessibleChild> ipcDoc =
+              new DocAccessibleChild(aDocument, wgc);
           aDocument->SetIPCDoc(ipcDoc);
           wgc->SendPDocAccessibleConstructor(ipcDoc, embedderAcc->ID(),
                                              aDocument->IsPrintDoc());

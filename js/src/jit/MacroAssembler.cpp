@@ -3399,6 +3399,26 @@ void MacroAssembler::emitMegamorphicCachedSetSlot(
   // if (scratch3->generation_ != scratch2) goto cacheMiss
   branch32(Assembler::NotEqual, scratch1, scratch2, &cacheMiss);
 
+  // Preserve the wrapper if necessary. In a world without x86 we would do this
+  // below in doAdd, letting us skip clearing the bit if it isn't set, but we
+  // do it here so we have enough scratch registers free.
+  Label skipPreserve;
+  Address afterShapePtr(
+      scratch3, MegamorphicSetPropCache::Entry::offsetOfTaggedAfterShape());
+  branchTestPtr(Assembler::Zero, afterShapePtr,
+                Imm32(MegamorphicSetPropCache::Entry::ShouldPreserveBit),
+                &skipPreserve);
+  {
+    // scratch1 and scratch2 are dead here. scratch3 is the cache entry.
+    LiveRegisterSet save;
+    save.set() = liveRegs.set();
+    save.takeUnchecked(scratch1);
+    save.takeUnchecked(scratch2);
+    preserveWrapper(obj, scratch1, scratch2, save);
+    branchIfFalseBool(scratch1, &cacheMiss);
+  }
+  bind(&skipPreserve);
+
   // scratch2 = entry->slotOffset()
   load32(
       Address(scratch3, MegamorphicSetPropCache::Entry::offsetOfSlotOffset()),
@@ -3406,9 +3426,6 @@ void MacroAssembler::emitMegamorphicCachedSetSlot(
 
   // scratch1 = slotOffset.offset()
   rshift32(Imm32(TaggedSlotOffset::OffsetShift), scratch2, scratch1);
-
-  Address afterShapePtr(scratch3,
-                        MegamorphicSetPropCache::Entry::offsetOfAfterShape());
 
   // if (!slotOffset.isFixedSlot()) goto dynamicSlot
   branchTest32(Assembler::Zero, scratch2,
@@ -3457,9 +3474,9 @@ void MacroAssembler::emitMegamorphicCachedSetSlot(
 
   bind(&doAdd);
   // scratch3 = entry->afterShape()
-  loadPtr(
-      Address(scratch3, MegamorphicSetPropCache::Entry::offsetOfAfterShape()),
-      scratch3);
+  loadPtr(afterShapePtr, scratch3);
+  andPtr(Imm32(~int32_t(MegamorphicSetPropCache::Entry::ShouldPreserveBit)),
+         scratch3);
 
   storeObjShape(scratch3, obj,
                 [emitPreBarrier](MacroAssembler& masm, const Address& addr) {

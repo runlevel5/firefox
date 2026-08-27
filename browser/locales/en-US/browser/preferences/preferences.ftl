@@ -2733,8 +2733,8 @@ preferences-etp-custom-cookie-behavior =
 
 preferences-etp-custom-cookie-behavior-accept-all =
     .label = Allow all cookies
-preferences-etp-custom-cookie-behavior-block-cross-site-cookies =
-    .label = Block cross-site cookies
+preferences-etp-custom-cookie-behavior-block-cross-site-tracking-cookies =
+    .label = Block cross-site tracking cookies
 preferences-etp-custom-cookie-behavior-isolate-cross-site-cookies =
     .label = Isolate cross-site cookies
 preferences-etp-custom-cookie-behavior-block-unvisited =

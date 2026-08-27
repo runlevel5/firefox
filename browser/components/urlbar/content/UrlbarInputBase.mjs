@@ -774,6 +774,16 @@ ${
   }
 
   /**
+   * Whether this is a bar dedicated to search.
+   *
+   * @see {UrlbarShared.isSearchbarSAP}
+   * @type {boolean}
+   */
+  get isSearchbarSAP() {
+    return UrlbarShared.isSearchbarSAP(this.#sapName);
+  }
+
+  /**
    * Gets the window mode for telemetry.
    *
    * @returns {WindowMode} The window mode.
@@ -2081,9 +2091,9 @@ ${
           // be reverted when they're notified of the engagement, but before
           // reverting, copy the search mode since it's nulled on revert.
           const { searchMode } = this;
-          if (this.sapName != "searchbar") {
-            // The searchbar is not reverted so providers enabled in
-            // the searchbar should be able to handle both cases.
+          if (!this.isSearchbarSAP) {
+            // A search bar is not reverted so providers enabled in a search bar
+            // should be able to handle both cases.
             this.handleRevert();
           }
           this.controller.engagementEvent.record(event, {
@@ -4433,7 +4443,7 @@ ${
       this.inputField.setSelectionRange(0, 0);
     }
 
-    if (where != "current" && this.sapName != "searchbar") {
+    if (where != "current" && !this.isSearchbarSAP) {
       this.handleRevert();
     }
 

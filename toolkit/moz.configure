@@ -3334,13 +3334,16 @@ set_define("MOZ_APP_UA_VERSION", depends(milestone.app_version)(lambda v: f'"{v}
 set_config("MOZ_APP_DISPLAYNAME", moz_app_displayname)
 
 
-# CLSID of the MSIX background task COM server.
+# WinRT activatable class that Windows activates when a registered background
+# task trigger fires.
 @depends(when=target_is_windows)
-def moz_backgroundtask_clsid():
-    return "85013aea-4a5a-4b6a-94b8-55090116061e"
+def moz_backgroundtask_activatable_class_id():
+    return "Mozilla.MsixComServer.BackgroundTaskHost"
 
 
-set_config("MOZ_BACKGROUNDTASK_CLSID", moz_backgroundtask_clsid)
+set_config(
+    "MOZ_BACKGROUNDTASK_ACTIVATABLE_CLASS_ID", moz_backgroundtask_activatable_class_id
+)
 
 
 confvar(

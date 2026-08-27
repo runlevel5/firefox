@@ -31,6 +31,7 @@ support-files = [
   "test_smartformfill_autocomplete.html",
   "test_smartwindow_promo_page.html",
   "test_smartwindow_promo.mjs",
+  "test_smartformfill_telemetry.html",
   "test_smartwindow_prompts_page.html",
   "test_smartwindow_prompts.mjs",
   "test_smartwindow_panel_list_page.html",
@@ -328,6 +329,8 @@ skip-if = [
 ["browser_smartwindow_smartformfill_autocomplete.js"]
 
 ["browser_smartwindow_smartformfill_metadata_lifecycle.js"]
+
+["browser_smartwindow_smartformfill_telemetry.js"]
 
 ["browser_smartwindow_switcher_telemetry.js"]
 

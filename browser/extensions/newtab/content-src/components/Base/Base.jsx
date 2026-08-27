@@ -1291,6 +1291,11 @@ export class BaseContent extends React.PureComponent {
                 {contentFeed && (
                   <div className={bandClassName}>{contentFeed}</div>
                 )}
+                {/* Nova only shows the wallpaper when both prefs are on, unlike
+              classic; see updateWallpaper. */}
+                {wallpapersEnabled &&
+                  wallpapersUserEnabled &&
+                  this.renderWallpaperAttribution()}
               </main>
             </div>
             <ConfirmDialog />

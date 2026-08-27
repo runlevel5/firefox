@@ -225,6 +225,205 @@ class APZCNestedFlingScrollHandoffTester : public APZCTreeManagerTester {
   RefPtr<TestAsyncPanZoomController> subframeApzc;
   UniquePtr<ScopedLayerTreeRegistration> registration;
 };
+
+// Android uses WidgetOverscrollEffect, which swallows residual deltas
+// instead of returning them to the handoff chain.
+#ifndef MOZ_WIDGET_ANDROID
+// Scenario from Bug 2046702 (mirrored vertically so the residual delta is
+// positive): The subframe sits at its top, the root near its bottom extent.
+// Panning down pins the subframe at its top and hands the delta off to the
+// root, making the root the input block's "scrolled APZC". Reversing the pan
+// within the same touch block drives the root back into its bottom extent;
+// the root can consume neither the residual delta (overscroll-behavior: none)
+// nor hand it off further, so the residual flows back to the subframe. The
+// subframe is not scrolled to the edge the residual overscroll belongs to (it
+// sits at its top, while the residual is a downward overscroll), and it is not
+// downchain of the scrolled APZC, so applying the residual as a local
+// overscroll effect there triggered the debug assertion in Axis::OverscrollBy
+// ("composition end is not equal (within error) to page end").
+// Additionally, CallDispatchScroll left aEndPoint stale when the
+// handoff target scrolled, inflating that residual.
+TEST_F(APZScrollHandoffTesterMock, OverscrollDropsDelta_Bug2046702) {
+  SCOPED_GFX_PREF_BOOL("apz.overscroll.enabled", true);
+  SCOPED_GFX_PREF_FLOAT("apz.touch_start_tolerance", 0.0f);
+  SCOPED_GFX_PREF_FLOAT("apz.touch_move_tolerance", 0.0f);
+
+  // Both the root and the subframe are tall vertical-only scrollers,
+  // so the subframe can scroll to its extent and hand the remaining delta
+  // off to the root. The root has overscroll-behavior: none,
+  // so it can scroll but can neither hand off nor show a local overscroll
+  // effect; residual deltas it cannot consume flow back to the subframe.
+  const char* treeShape = "x(x)";
+  LayerIntRect layerVisibleRect[] = {LayerIntRect(0, 0, 100, 100),
+                                     LayerIntRect(0, 0, 100, 100)};
+  CreateScrollData(treeShape, layerVisibleRect);
+  SetScrollableFrameMetrics(root, ScrollableLayerGuid::START_SCROLL_ID,
+                            CSSRect(0, 0, 100, 1000));
+  SetScrollableFrameMetrics(layers[1], ScrollableLayerGuid::START_SCROLL_ID + 1,
+                            CSSRect(0, 0, 100, 1000));
+  SetScrollHandoff(layers[1], root);
+  ModifyFrameMetrics(root, [](ScrollMetadata& aSm, FrameMetrics&) {
+    OverscrollBehaviorInfo behavior;
+    behavior.mBehaviorX = OverscrollBehavior::None;
+    behavior.mBehaviorY = OverscrollBehavior::None;
+    aSm.SetOverscrollBehavior(behavior);
+  });
+  registration = MakeUnique<ScopedLayerTreeRegistration>(LayersId{0}, mcc);
+  UpdateHitTestingTree();
+  rootApzc = ApzcOf(root);
+  rootApzc->GetFrameMetrics().SetIsRootContent(true);
+
+  RefPtr<TestAsyncPanZoomController> child = ApzcOf(layers[1]);
+
+  // Scroll the root near its bottom extent, leaving a small amount of room.
+  rootApzc->GetFrameMetrics().SetVisualScrollOffset(CSSPoint(0, 890));
+
+  // The child stays scrolled all the way to its top.
+  EXPECT_EQ(child->GetFrameMetrics().GetVisualScrollOffset().y, 0);
+
+  ScrollableLayerGuid::ViewID subframeScrollId =
+      ScrollableLayerGuid::START_SCROLL_ID + 1;
+
+  QueueMockHitResult(subframeScrollId);
+  APZEventResult result = TouchDown(manager, {10, 20}, mcc->Time());
+  SetDefaultAllowedTouchBehavior(manager, result.mInputBlockId);
+
+  // Move the finger down (content scrolls up): the child is pinned at its
+  // top, so the delta hands off to the root, which scrolls 890 -> 810 and
+  // becomes the block's scrolled APZC.
+  for (int y = 40; y <= 100; y += 20) {
+    mcc->AdvanceByMillis(16);
+    TouchMove(manager, {10, y}, mcc->Time());
+  }
+  EXPECT_EQ(child->GetFrameMetrics().GetVisualScrollOffset().y, 0);
+  EXPECT_LT(rootApzc->GetFrameMetrics().GetVisualScrollOffset().y, 890);
+
+  // Reverse the motion within the same touch block, by more than the room
+  // the root has left. The child stays frozen (it is not downchain of the
+  // scrolled APZC), the root scrolls back down and hits its extent, and the
+  // residual delta flows back to the child. Before the fix, the child then
+  // applies the residual as a local overscroll effect while not scrolled to
+  // its end, firing the assertion.
+  for (int y = 80; y >= 0; y -= 20) {
+    mcc->AdvanceByMillis(16);
+    TouchMove(manager, {10, y}, mcc->Time());
+  }
+
+  // With the fix, the residual delta is dropped: the child never moved or
+  // overscrolled, and the root is pinned at its extent without an overscroll
+  // effect (overscroll-behavior: none).
+  EXPECT_EQ(child->GetFrameMetrics().GetVisualScrollOffset().y, 0);
+  EXPECT_EQ(rootApzc->GetFrameMetrics().GetVisualScrollOffset().y, 900);
+  EXPECT_FALSE(child->IsOverscrolled());
+  EXPECT_FALSE(rootApzc->IsOverscrolled());
+
+  // Release and let animations settle; nothing should remain overscrolled.
+  mcc->AdvanceByMillis(16);
+  TouchUp(manager, {10, 0}, mcc->Time());
+
+  child->AdvanceAnimationsUntilEnd();
+  rootApzc->AdvanceAnimationsUntilEnd();
+
+  EXPECT_FALSE(child->IsOverscrolled());
+  EXPECT_FALSE(rootApzc->IsOverscrolled());
+}
+
+// Models the reproducer page attached to Bug 2046702 (attachment 9596335) as
+// closely as a layer tree allows, because the test above does not exercise the
+// same code: it relies on overscroll-behavior: none to stop the root absorbing
+// the residual, while the page has no overscroll-behavior at all. Unlike the
+// test above, this one is oriented the same way round as the page.
+//
+// The subframe sits at its bottom and the root a little below its top. Panning
+// the finger up pins the subframe at its bottom and hands the delta off to the
+// root, making the root the input block's scrolled APZC. Reversing the pan
+// within the same touch block drives the root back into its top extent, and
+// the residual delta flows back to the subframe, which is at the opposite edge
+// from the one that residual belongs to.
+TEST_F(APZScrollHandoffTesterMock, OverscrollDropsDelta_Bug2046702_Reproducer) {
+  SCOPED_GFX_PREF_BOOL("apz.overscroll.enabled", true);
+  SCOPED_GFX_PREF_FLOAT("apz.touch_start_tolerance", 0.0f);
+  SCOPED_GFX_PREF_FLOAT("apz.touch_move_tolerance", 0.0f);
+
+  const char* treeShape = "x(x)";
+  LayerIntRect layerVisibleRect[] = {LayerIntRect(0, 0, 400, 1000),
+                                     LayerIntRect(0, 400, 400, 400)};
+  CreateScrollData(treeShape, layerVisibleRect);
+  SetScrollableFrameMetrics(root, ScrollableLayerGuid::START_SCROLL_ID,
+                            CSSRect(0, 0, 400, 4000));
+  SetScrollableFrameMetrics(layers[1], ScrollableLayerGuid::START_SCROLL_ID + 1,
+                            CSSRect(0, 0, 400, 1600));
+  SetScrollHandoff(layers[1], root);
+  registration = MakeUnique<ScopedLayerTreeRegistration>(LayersId{0}, mcc);
+  UpdateHitTestingTree();
+  rootApzc = ApzcOf(root);
+  rootApzc->GetFrameMetrics().SetIsRootContent(true);
+
+  RefPtr<TestAsyncPanZoomController> subframe = ApzcOf(layers[1]);
+
+  // Scroll/pan the parent scroller by a small amount such that it is not
+  // scrolled all the way to the top.
+  rootApzc->GetFrameMetrics().SetVisualScrollOffset(CSSPoint(0, 20));
+
+  // Scroll the child element all the way to the bottom.
+  subframe->GetFrameMetrics().SetVisualScrollOffset(CSSPoint(0, 1200));
+
+  ScrollableLayerGuid::ViewID subframeScrollId =
+      ScrollableLayerGuid::START_SCROLL_ID + 1;
+
+  // The pan drifts sideways as a hand-driven drag does. This is load-bearing,
+  // not incidental: neither scroller has any horizontal scroll range, so
+  // horizontal is absent from GetOverscrollableDirections() and
+  // GenericOverscrollEffect::ConsumeOverscroll leaves the x component of the
+  // residual alone. That keeps IsZero(overscroll) false, so the root reports
+  // the delta as not consumed and the vertical remainder travels back to the
+  // subframe. With a perfectly vertical pan the root zeroes the whole residual,
+  // reports "consumed", and nothing ever reaches the subframe.
+  int x = 200;
+  QueueMockHitResult(subframeScrollId);
+  APZEventResult result = TouchDown(manager, {x, 700}, mcc->Time());
+  SetDefaultAllowedTouchBehavior(manager, result.mInputBlockId);
+
+  // Do a panning motion (moving the mouse cursor up) such that the child
+  // element keeps hitting the bottom and handing off scrolling to the parent.
+  // The subframe is pinned at its bottom, so the root scrolls 20 -> 220 and
+  // becomes the block's scrolled APZC.
+  for (int y = 650; y >= 500; y -= 50) {
+    mcc->AdvanceByMillis(16);
+    x -= 4;
+    TouchMove(manager, {x, y}, mcc->Time());
+  }
+  EXPECT_EQ(subframe->GetFrameMetrics().GetVisualScrollOffset().y, 1200);
+  EXPECT_GT(rootApzc->GetFrameMetrics().GetVisualScrollOffset().y, 20);
+
+  // "Once scroll-handoff to the parent happened and the parent began to
+  // scroll, reverse the motion (moving the mouse cursor down)", by more than
+  // the room the root has left.
+  for (int y = 550; y <= 800; y += 50) {
+    mcc->AdvanceByMillis(16);
+    x -= 4;
+    TouchMove(manager, {x, y}, mcc->Time());
+  }
+
+  // The subframe never moved and never overscrolled; the root is pinned at its
+  // top extent. The root is allowed a local overscroll effect there, so its
+  // overscroll state is not asserted on until the block has settled.
+  EXPECT_EQ(subframe->GetFrameMetrics().GetVisualScrollOffset().y, 1200);
+  EXPECT_EQ(rootApzc->GetFrameMetrics().GetVisualScrollOffset().y, 0);
+  EXPECT_FALSE(subframe->IsOverscrolled());
+
+  // Release and let animations settle; nothing should remain overscrolled.
+  mcc->AdvanceByMillis(16);
+  TouchUp(manager, {x, 800}, mcc->Time());
+
+  subframe->AdvanceAnimationsUntilEnd();
+  rootApzc->AdvanceAnimationsUntilEnd();
+
+  EXPECT_FALSE(subframe->IsOverscrolled());
+  EXPECT_FALSE(rootApzc->IsOverscrolled());
+}
+#endif
+
 #ifndef MOZ_WIDGET_ANDROID  // Currently fails on Android
 // Here we test that if the processing of a touch block is deferred while we
 // wait for content to send a prevent-default message, overscroll is still

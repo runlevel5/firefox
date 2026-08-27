@@ -28,6 +28,7 @@ ChromeUtils.defineESModuleGetters(lazy, {
 /** @typedef {import("moz-src:///browser/components/aiwindow/models/SmartFormFillModel.sys.mjs").TabData} TabData */
 /** @typedef {import("moz-src:///browser/components/aiwindow/models/SmartFormFillModel.sys.mjs").RelevantTab} RelevantTab */
 /** @typedef {import("moz-src:///browser/components/aiwindow/ui/modules/SmartFormFillDocument.sys.mjs").FormData} FormData */
+/** @typedef {import("moz-src:///browser/components/aiwindow/ui/actors/SmartFormFillParent.sys.mjs").RequestObserver} RequestObserver */
 
 /**
  * @typedef {{
@@ -47,8 +48,30 @@ ChromeUtils.defineESModuleGetters(lazy, {
  * @typedef {{
  *   candidates: Array<Candidate>,
  *   valuesByToken: Map<string, string>,
+ *   tokensByFieldId: Map<string, string>,
  * }} CandidateResult
  */
+
+/**
+ * @typedef {{
+ *   relevantTabsCompleted: boolean,
+ *   classificationsCompleted: boolean,
+ * }} InitializationResult
+ */
+
+// Confidence levels the model can answer with, ordered so a threshold can be
+// read as "at least this level". A Map rather than an object so a value the
+// model made up cannot resolve to an inherited property: anything that is not
+// one of these ranks below all of them, so it is never filled.
+const CONFIDENCE_RANK = new Map([
+  ["low", 0],
+  ["medium", 1],
+  ["high", 2],
+]);
+
+// The lowest confidence a model's value must reach to be filled. Reported as
+// the threshold of the generation request, so both have to move together.
+const FILL_CONFIDENCE_THRESHOLD = "high";
 
 // TODO: Adjust this based on evals for optimal amount
 const MAX_TABS = 30;
@@ -135,13 +158,25 @@ export class SmartFormFillController {
   #classifiedFieldsByFormId;
 
   /**
+   * Tells the parent what the model was asked and what it answered. The token a
+   * dispatch callback returns is opaque here: it is handed back on the matching
+   * answer or failure so the parent can pair them.
+   *
+   * @type {RequestObserver}
+   */
+  #requestObserver;
+
+  /**
    * Creates a controller for Smart Form Fill
    *
    * @param {PageInfo} pageInfo The page info for the tab
+   * @param {RequestObserver} observer Notified of the requests this controller
+   * dispatches
    */
-  constructor(pageInfo) {
+  constructor(pageInfo, observer) {
     this.#pageInfo = pageInfo;
     this.#formDataById = new Map();
+    this.#requestObserver = observer;
     this.#tabCounter = 0;
     this.#tabsById = new Map();
     this.#relevantTabsByFormId = new Map();
@@ -315,6 +350,7 @@ export class SmartFormFillController {
     return this.#generateFormValues(
       formId,
       emptyFields,
+      formData.fields,
       selectedTabs,
       tabContentById,
       pageText
@@ -325,7 +361,10 @@ export class SmartFormFillController {
    * Generates values for one form.
    *
    * @param {string} id
-   * @param {Array<FieldData>} fields
+   * @param {Array<FieldData>} fields The fields to fill
+   * @param {Array<FieldData>} formFields Every field of the form, as it was
+   * when the fields to fill were picked. Read here rather than when the
+   * response lands so a form update cannot renumber the fields that were sent
    * @param {Array<RelevantTab>} selectedTabs
    * @param {Map<string, string>} tabContentById
    * @param {string} pageText
@@ -335,6 +374,7 @@ export class SmartFormFillController {
   async #generateFormValues(
     id,
     fields,
+    formFields,
     selectedTabs,
     tabContentById,
     pageText
@@ -370,36 +410,51 @@ export class SmartFormFillController {
 
     const context = { pageText, relevantTabs, memories };
 
+    // Null until the request is dispatched: a failure while gathering the
+    // candidates means no request was sent, so it gets no response event.
+    let flow = null;
+
     try {
-      const { candidates, valuesByToken } = await this.#getCandidates(fields);
+      const { candidates, valuesByToken, tokensByFieldId } =
+        await this.#getCandidates(fields);
       abortCtrl.signal.throwIfAborted();
 
-      const values = await lazy.SmartFormFillModel.generateFormValues(
-        {
-          task,
-          page,
-          fields: this.#getFieldDataForClassification(fields).map(field => {
-            const classification = classifications.get(field.id);
-            const { localGuess, localConfidence, ...fieldData } = field;
-            let classificationConfidence = "low";
-            if (localConfidence > 0.6) {
-              classificationConfidence = "high";
-            } else if (localConfidence > 0.3) {
-              classificationConfidence = "medium";
-            }
+      const request = {
+        task,
+        page,
+        fields: this.#getFieldDataForClassification(fields).map(field => {
+          const classification = classifications.get(field.id);
+          const { localGuess, localConfidence, ...fieldData } = field;
+          let classificationConfidence = "low";
+          if (localConfidence > 0.6) {
+            classificationConfidence = "high";
+          } else if (localConfidence > 0.3) {
+            classificationConfidence = "medium";
+          }
 
-            return {
-              ...fieldData,
-              type: classification?.type ?? localGuess ?? "unknown",
-              classificationConfidence:
-                classification?.confidence ?? classificationConfidence,
-            };
-          }),
-          candidates,
-          context,
+          return {
+            ...fieldData,
+            type: classification?.type ?? localGuess ?? "unknown",
+            classificationConfidence:
+              classification?.confidence ?? classificationConfidence,
+          };
+        }),
+        candidates,
+        context,
+      };
+
+      const values = await lazy.SmartFormFillModel.generateFormValues(request, {
+        signal: abortCtrl.signal,
+        // Every batch that sends reports, so only the first one opens the
+        // round: it is one round no matter how many batches it took.
+        onDispatch: modelInfo => {
+          flow ??= this.#requestObserver.onGenerateDispatched(id, request, {
+            valuesByToken,
+            modelInfo,
+            threshold: FILL_CONFIDENCE_THRESHOLD,
+          });
         },
-        { signal: abortCtrl.signal }
-      );
+      });
       abortCtrl.signal.throwIfAborted();
 
       const fillInstructions = this.#getFillInstructions(
@@ -408,10 +463,25 @@ export class SmartFormFillController {
         valuesByToken
       );
 
+      this.#requestObserver.onGenerateAnswered(flow, {
+        formId: id,
+        fieldsFilled: fillInstructions.length,
+        response: values,
+        fields,
+        formFields,
+        classifications,
+        tokensByFieldId,
+      });
+
       return {
         id,
         fields: fillInstructions,
       };
+    } catch (error) {
+      if (flow && !abortCtrl.signal.aborted) {
+        this.#requestObserver.onGenerateFailed(flow, error);
+      }
+      throw error;
     } finally {
       this.#removeAbortController(
         this.#abortValueGenerationControllers,
@@ -474,7 +544,8 @@ export class SmartFormFillController {
 
     for (const result of values.fields) {
       if (
-        result.confidence !== "high" ||
+        (CONFIDENCE_RANK.get(result.confidence) ?? -1) <
+          CONFIDENCE_RANK.get(FILL_CONFIDENCE_THRESHOLD) ||
         !fieldIds.has(result.id) ||
         resolvedFieldIds.has(result.id)
       ) {
@@ -515,6 +586,7 @@ export class SmartFormFillController {
   async #getCandidates(fields) {
     const candidates = [];
     const valuesByToken = new Map();
+    const tokensByFieldId = new Map();
     const typeCounts = new Map();
 
     for (const field of fields) {
@@ -535,9 +607,10 @@ export class SmartFormFillController {
 
       candidates.push({ token, type });
       valuesByToken.set(token, value);
+      tokensByFieldId.set(field.id, type);
     }
 
-    return { candidates, valuesByToken };
+    return { candidates, valuesByToken, tokensByFieldId };
   }
 
   /**
@@ -733,22 +806,47 @@ export class SmartFormFillController {
    * @returns {Promise<RelevantTabsResponse>}
    */
   async #findRelevantTabsForForm({ id, fields }, signal) {
-    const relevantTabCandidates =
-      await lazy.SmartFormFillModel.findRelevantTabs(
-        this.#getRelevantTabRequestBody(fields),
-        { signal }
+    const request = this.#getRelevantTabRequestBody(fields);
+
+    // Null until the request is dispatched: a failure while resolving the model
+    // or the prompt means no request was sent, so it gets no events.
+    let flow = null;
+
+    try {
+      const relevantTabCandidates =
+        await lazy.SmartFormFillModel.findRelevantTabs(request, {
+          signal,
+          onDispatch: modelInfo => {
+            flow = this.#requestObserver.onRelevantTabsDispatched(
+              id,
+              request,
+              modelInfo
+            );
+          },
+        });
+
+      signal.throwIfAborted();
+      const relevantTabs = {
+        selectedTabs: this.#getValidRelevantTabs(
+          relevantTabCandidates?.selectedTabs
+        ),
+      };
+
+      this.#relevantTabsByFormId.set(id, relevantTabs);
+      this.#requestObserver.onRelevantTabsAnswered(
+        flow,
+        relevantTabCandidates,
+        relevantTabs.selectedTabs.length
       );
 
-    signal.throwIfAborted();
-    const relevantTabs = {
-      selectedTabs: this.#getValidRelevantTabs(
-        relevantTabCandidates?.selectedTabs
-      ),
-    };
+      return relevantTabs;
+    } catch (error) {
+      if (flow && !signal.aborted) {
+        this.#requestObserver.onRelevantTabsFailed(flow, error);
+      }
 
-    this.#relevantTabsByFormId.set(id, relevantTabs);
-
-    return relevantTabs;
+      throw error;
+    }
   }
 
   /**
@@ -759,15 +857,39 @@ export class SmartFormFillController {
    * @returns {Promise<ClassificationResponse>}
    */
   async #classifyFormFields({ id, fields }, signal) {
-    const classifiedFields = await lazy.SmartFormFillModel.classifyFields(
-      this.#getClassifyFieldsRequestBody(fields),
-      { signal }
-    );
+    const request = this.#getClassifyFieldsRequestBody(fields);
 
-    signal.throwIfAborted();
-    this.#classifiedFieldsByFormId.set(id, classifiedFields);
+    // Null until the request is dispatched: a failure while resolving the model
+    // or the prompt means no request was sent, so it gets no events.
+    let flow = null;
 
-    return classifiedFields;
+    try {
+      const classifiedFields = await lazy.SmartFormFillModel.classifyFields(
+        request,
+        {
+          signal,
+          onDispatch: modelInfo => {
+            flow = this.#requestObserver.onClassifyDispatched(
+              id,
+              request,
+              modelInfo
+            );
+          },
+        }
+      );
+
+      signal.throwIfAborted();
+      this.#classifiedFieldsByFormId.set(id, classifiedFields);
+      this.#requestObserver.onClassifyAnswered(flow, classifiedFields);
+
+      return classifiedFields;
+    } catch (error) {
+      if (flow && !signal.aborted) {
+        this.#requestObserver.onClassifyFailed(flow, error);
+      }
+
+      throw error;
+    }
   }
 
   /**

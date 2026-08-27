@@ -243,10 +243,9 @@ toolbar[inactive="true"] .urlbar,
 }
 
 /* In a page, the element goes in the top layer anchored to the container it sits
-   in, which the embedder names. The viewport clips it there, where a chrome panel
-   may extend past the window, so the view takes the space below the input and
-   scrolls within it. A chrome window's own bars are popovers too, and the element
-   lays out in flow until it is shown, hence both parts of the selector. */
+   in, which the embedder names. A chrome window's own bars are popovers too, and
+   the element lays out in flow until it is shown, hence both parts of the
+   selector. */
 .urlbar[in-page][breakout] {
   width: 100%;
 
@@ -257,31 +256,6 @@ toolbar[inactive="true"] .urlbar,
     max-height: 100%;
     display: flex;
     flex-direction: column;
-
-    > .urlbarView {
-      display: flex;
-      flex-direction: column;
-      min-height: 0;
-
-      > .urlbarView-body-outer {
-        min-height: 0;
-        overflow-y: auto;
-      }
-    }
-
-    /* The gap under the input sits outside the scrollport, so a row scrolling
-       past it doesn't paint over the input's border edge. */
-    &:not([noresults]) > .urlbarView {
-      padding-block-start: calc(var(--urlbarView-results-padding) - var(--urlbarView-row-gutter));
-
-      @media -moz-pref("browser.nova.enabled") {
-        padding-block-start: var(--urlbarView-padding);
-      }
-
-      > .urlbarView-body-outer > .urlbarView-body-inner > .urlbarView-results {
-        padding-block-start: 0;
-      }
-    }
   }
 }
 
@@ -357,11 +331,6 @@ toolbar[inactive="true"] .urlbar,
   .urlbar[breakout][breakout-extend][focused] > & {
     outline: var(--urlbar-input-container-outline-breakout-focused);
   }
-}
-
-.urlbar:not([open]) > .urlbarView,
-.urlbar:not([breakout]) > .urlbarView {
-  display: none;
 }
 
 #searchbar {
@@ -1416,7 +1385,7 @@ toolbar[inactive="true"] .urlbar,
     top: -999px;
   }
 
-  .urlbar:not(#searchbar-new) & {
+  .urlbar:not([sap-name="searchbar"], [sap-name="newtab_searchbar"]) & {
     @media (not -moz-pref("browser.urlbar.searchModeSwitcher.featureGate")) and (not -moz-pref("browser.urlbar.scotchBonnet.enableOverride")) {
       display: none;
     }

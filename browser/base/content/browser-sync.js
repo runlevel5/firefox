@@ -624,6 +624,8 @@ this.FxAMenuDeviceList = class FxAMenuDeviceList {
    * device is still appended so the list never shows fewer devices than the
    * tabs engine knows about (e.g. when the cached device list is stale or not
    * yet fetched).
+   *
+   * The current device gets excluded.
    */
   async _getMergedDeviceList() {
     let clients = await SyncedTabs.getTabClients();
@@ -645,12 +647,16 @@ this.FxAMenuDeviceList = class FxAMenuDeviceList {
     let merged = [];
     let matchedClients = new Set();
     for (let device of devices) {
+      let client = clientByFxaId.get(device.id);
+      if (client) {
+        // Record the client even when the device is skipped below, so the pass
+        // over unmatched clients doesn't add it back.
+        matchedClients.add(client);
+      }
       if (device.isCurrentDevice) {
         continue;
       }
-      let client = clientByFxaId.get(device.id);
       if (client) {
-        matchedClients.add(client);
         merged.push(client);
       } else if (fxAccounts.commands.sendTab.isDeviceCompatible(device)) {
         merged.push({
@@ -1549,18 +1555,36 @@ var gSync = {
   },
 
   _showSecureSyncSubpanel(anchor, event) {
-    const deviceName = fxAccounts.device.getLocalName();
+    this._updateSecureSyncNowLabel();
+    PanelUI.showSubView("PanelUI-fxa-menu-secure-sync-subpanel", anchor, event);
+  },
+
+  // Updates the secure sync subpanel's "Sync now" button label. While a sync is
+  // in progress it reads "Syncing…"; otherwise it reads "Sync <device> Now".
+  // The spinning sync icon is shown separately via the "syncstatus" attribute
+  // and CSS, and only when animations are enabled.
+  _updateSecureSyncNowLabel() {
     const labelEl = PanelMultiView.getViewNode(
       document,
       "PanelUI-fxa-menu-secure-sync-now-label"
     );
-    labelEl.setAttribute(
-      "value",
-      this.fluentStrings.formatValueSync("fxa-menu-sync-device-now", {
-        deviceName,
-      })
-    );
-    PanelUI.showSubView("PanelUI-fxa-menu-secure-sync-subpanel", anchor, event);
+    if (!labelEl) {
+      return;
+    }
+    if (this._isCurrentlySyncing) {
+      labelEl.setAttribute(
+        "value",
+        this.fluentStrings.formatValueSync("fxa-toolbar-sync-syncing2")
+      );
+    } else {
+      const deviceName = fxAccounts.device.getLocalName();
+      labelEl.setAttribute(
+        "value",
+        this.fluentStrings.formatValueSync("fxa-menu-sync-device-now", {
+          deviceName,
+        })
+      );
+    }
   },
 
   /**
@@ -1694,12 +1718,15 @@ var gSync = {
     const state = UIState.get();
     if (state.status == UIState.STATUS_SIGNED_IN && state.syncEnabled) {
       this._showSecureSyncSubpanel(anchor, event);
-    } else if (state.status == UIState.STATUS_SIGNED_IN) {
-      // Signed in with sync off: open preferences to turn sync on.
-      this.openPrefsFromFxaMenu("sync_settings", anchor);
     } else {
-      // Needs (re-)authentication: open the sign-in page.
-      this.openFxAEmailFirstPageFromFxaMenu(anchor);
+      if (state.status == UIState.STATUS_SIGNED_IN) {
+        // Signed in with sync off: open preferences to turn sync on.
+        this.openPrefsFromFxaMenu("sync_settings", anchor);
+      } else {
+        // Needs (re-)authentication: open the sign-in page.
+        this.openFxAEmailFirstPageFromFxaMenu(anchor);
+      }
+      CustomizableUI.hidePanelForNode(anchor);
     }
   },
 
@@ -3271,6 +3298,8 @@ var gSync = {
       .forEach(el => {
         el.setAttribute("syncstatus", "active");
       });
+
+    this._updateSecureSyncNowLabel();
   },
 
   _onActivityStop() {
@@ -3294,6 +3323,8 @@ var gSync = {
       .forEach(el => {
         el.removeAttribute("syncstatus");
       });
+
+    this._updateSecureSyncNowLabel();
 
     Services.obs.notifyObservers(null, "test:browser-sync:activity-stop");
   },

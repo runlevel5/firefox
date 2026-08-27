@@ -279,9 +279,10 @@ class BrowserFragment : BaseBrowserFragment(), UserInteractionHandler, SystemIns
                         engine = context.components.core.engine,
                         store = context.components.core.store,
                         controlsView = binding.readerViewControlsBar,
-                    ) { available, active ->
-                        browserScreenStore.dispatch(ReaderModeStatusUpdated(ReaderModeStatus(available, active)))
-                    }
+                        onReaderViewStatusChange = { available, active ->
+                            browserScreenStore.dispatch(ReaderModeStatusUpdated(ReaderModeStatus(available, active)))
+                        },
+                    )
                 },
             owner = this,
             view = view,

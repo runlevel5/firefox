@@ -2187,6 +2187,8 @@ inline void TraceBufferSlot(JSTracer* trc, NativeObject* obj, uint32_t slot,
   }
 }
 
+bool PreserveAnyUnpreservedWrapper(JSContext* cx, Handle<NativeObject*> obj);
+
 }  // namespace js
 
 #endif /* vm_NativeObject_h */

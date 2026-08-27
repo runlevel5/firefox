@@ -7,8 +7,6 @@ const { TelemetryController } = ChromeUtils.importESModule(
   "resource://gre/modules/TelemetryController.sys.mjs"
 );
 
-AddonTestUtils.init(this);
-AddonTestUtils.overrideCertDB();
 AddonTestUtils.createAppInfo(
   "xpcshell@tests.mozilla.org",
   "XPCShell",

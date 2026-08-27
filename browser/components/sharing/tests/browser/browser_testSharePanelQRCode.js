@@ -23,22 +23,6 @@ add_task(async function test_QRCode() {
     await panelHidden;
     is(sharePanel.state, "closed", "Share panel is closed");
 
-    let dialogBox = gBrowser.getTabDialogBox(browser);
-    let dialogManager = dialogBox.getTabDialogManager();
-
-    await TestUtils.waitForCondition(
-      () => dialogManager._dialogs.length,
-      "Waiting for the QR code subdialog to open"
-    );
-
-    let dialog = dialogManager._dialogs[0];
-    await dialog._dialogReady;
-
-    let dialogDoc = dialog._frame.contentDocument;
-    Assert.equal(
-      dialogDoc.documentElement.id,
-      "qrcode-dialog",
-      "The QR code button opens the QR code dialog"
-    );
+    await waitForQrCodeDialog(browser);
   });
 });

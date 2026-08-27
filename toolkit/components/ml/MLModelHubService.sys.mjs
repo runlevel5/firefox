@@ -6,7 +6,8 @@ import { XPCOMUtils } from "resource://gre/modules/XPCOMUtils.sys.mjs";
 
 const lazy = XPCOMUtils.declareLazy({
   ModelHub: "chrome://global/content/ml/ModelHub.sys.mjs",
-  MLEngineParent: "resource://gre/actors/MLEngineParent.sys.mjs",
+  MLEngineParent:
+    "moz-src:///toolkit/components/ml/actors/MLEngineParent.sys.mjs",
   console: () => {
     return console.createInstance({
       maxLogLevelPref: "browser.ml.logLevel",

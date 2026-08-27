@@ -118,6 +118,13 @@ class InlinableCallData : public InlinableOpData {
  public:
   ObjOperandId calleeOperand;
   CallFlags callFlags;
+
+  // For bound function calls, |calleeOperand| is the bound function and
+  // |boundTargetOperand| is the target we're inlining. numBoundArgs is
+  // currently always 0: see updateCallInfoForInlinedBoundCall.
+  bool isBound = false;
+  ObjOperandId boundTargetOperand;
+  uint32_t numBoundArgs = 0;
 };
 
 class InlinableGetterData : public InlinableOpData {

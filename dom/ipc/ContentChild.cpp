@@ -3539,6 +3539,8 @@ mozilla::ipc::IPCResult ContentChild::RecvCrossProcessRedirect(
     RedirectToRealChannelArgs&& aArgs,
     nsTArray<Endpoint<extensions::PStreamFilterParent>>&& aEndpoints,
     CrossProcessRedirectResolver&& aResolve) {
+  MaybeBecomeUntrusted();
+
   nsCOMPtr<nsILoadInfo> loadInfo;
   nsresult rv = mozilla::ipc::LoadInfoArgsToLoadInfo(
       aArgs.loadInfo(), NOT_REMOTE_TYPE, getter_AddRefs(loadInfo));

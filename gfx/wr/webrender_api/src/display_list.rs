@@ -23,6 +23,12 @@ use crate::gradient_builder::GradientBuilder;
 use crate::color::ColorF;
 use crate::font::{FontInstanceKey, GlyphInstance, GlyphOptions};
 use crate::image::{ColorDepth, ImageKey};
+use crate::key_types::EdgeMask;
+use crate::key_types::GradientStopKey;
+use crate::prim_geometry::{
+    apply_gradient_local_clip, optimize_linear_gradient, optimize_radial_gradient,
+    resolve_tile_size, simplify_repeated_primitive,
+};
 use crate::units::*;
 
 
@@ -1350,6 +1356,7 @@ impl DisplayListBuilder {
             common,
             color: PropertyBinding::Value(color),
             bounds: self.shift_rect(bounds, offset),
+            transformed_aa_edges: EdgeMask::all(),
         });
         self.push_item(&item);
     }
@@ -1365,6 +1372,7 @@ impl DisplayListBuilder {
             common,
             color,
             bounds: self.shift_rect(bounds, offset),
+            transformed_aa_edges: EdgeMask::all(),
         });
         self.push_item(&item);
     }
@@ -1581,16 +1589,22 @@ impl DisplayListBuilder {
         common: &di::CommonItemProperties,
         bounds: LayoutRect,
         widths: LayoutSideOffsets,
-        details: di::BorderDetails,
+        mut details: di::BorderDetails,
         // Stops for a `NinePatchBorderSource` gradient; empty otherwise.
         gradient_stops: &[di::GradientStop],
     ) {
         let (common, offset) = self.normalize_common(common);
         self.push_stops(gradient_stops);
+        let bounds = self.shift_rect(bounds, offset);
+
+        // Shrink radii that would make adjacent corners overlap.
+        if let di::BorderDetails::Normal(ref mut border) = details {
+            crate::key_types::ensure_no_corner_overlap(&mut border.radius, bounds.size());
+        }
 
         let item = di::DisplayItem::Border(di::BorderDisplayItem {
             common,
-            bounds: self.shift_rect(bounds, offset),
+            bounds,
             details,
             widths,
         });
@@ -1628,14 +1642,67 @@ impl DisplayListBuilder {
             return;
         }
 
-        let (common, eso_offset) = self.normalize_common(common);
+        if color.a == 0.0 {
+            return;
+        }
+
+        // Inset shadows get smaller as spread radius increases.
+        let spread_amount = match clip_mode {
+            di::BoxShadowClipMode::Outset => spread_radius,
+            di::BoxShadowClipMode::Inset => -spread_radius,
+        };
+
+        // Ensure the blur radius is somewhat sensible.
+        let blur_radius = f32::min(blur_radius, di::MAX_BLUR_RADIUS);
+
+        let (mut common, eso_offset) = self.normalize_common(common);
+
+        // An outset shadow is drawn with default primitive flags rather than
+        // the item's.
+        if clip_mode == di::BoxShadowClipMode::Outset {
+            common.flags = di::PrimitiveFlags::default();
+        }
+
+        let element_rect = self.shift_rect(box_bounds, eso_offset);
+
+        // Where the shadow sits in the element's local space.
+        let shadow_rect = element_rect
+            .translate(offset)
+            .inflate(spread_amount, spread_amount);
+
+        // Room for the blurred region around it. Element clipping is handled
+        // analytically in the shader.
+        let blur_offset = (di::BLUR_SAMPLE_SCALE * blur_radius).ceil();
+
+        let bounds = match clip_mode {
+            di::BoxShadowClipMode::Outset => {
+                // Certain spread-radii make the shadow invalid.
+                if shadow_rect.is_empty() {
+                    return;
+                }
+                shadow_rect.inflate(blur_offset, blur_offset)
+            }
+            di::BoxShadowClipMode::Inset => {
+                // If the inner shadow rect contains the element rect, no pixels
+                // will be shadowed.
+                if border_radius.is_zero()
+                    && shadow_rect
+                        .inflate(-blur_radius, -blur_radius)
+                        .contains_box(&element_rect)
+                {
+                    return;
+                }
+                element_rect
+            }
+        };
+
         let item = di::DisplayItem::BoxShadow(di::BoxShadowDisplayItem {
             common,
-            box_bounds: self.shift_rect(box_bounds, eso_offset),
+            bounds,
             offset,
             color,
             blur_radius,
-            spread_radius,
+            spread_amount,
             border_radius,
             shadow_radius,
             clip_mode,
@@ -1795,12 +1862,44 @@ impl DisplayListBuilder {
         tile_spacing: LayoutSize,
         stops: &[di::GradientStop],
     ) {
+        if !gradient.is_valid() {
+            return;
+        }
+
         let (common, offset) = self.normalize_common(common);
+        let mut bounds = self.shift_rect(bounds, offset);
+
+        let mut tile_size = resolve_tile_size(&bounds, tile_size);
+
+        let mut start = gradient.start_point;
+        let mut end = gradient.end_point;
+        // The simplification and clip pass. The fast-path two-stop segment
+        // decomposition is not done here: it happens at prepare time, so
+        // segments tile against the snapped prim rect (see
+        // `decompose_axis_aligned_gradient`).
+        optimize_linear_gradient(
+            &mut bounds,
+            &mut tile_size,
+            tile_spacing,
+            &common.clip_rect,
+            &mut start,
+            &mut end,
+        );
+
+        // A tile that rounds up to nothing covers no pixel.
+        if tile_size.ceil().is_empty() {
+            return;
+        }
+
         self.push_stops(stops);
         let item = di::DisplayItem::Gradient(di::GradientDisplayItem {
             common,
-            bounds: self.shift_rect(bounds, offset),
-            gradient,
+            bounds,
+            gradient: di::Gradient {
+                start_point: start,
+                end_point: end,
+                ..gradient
+            },
             tile_size,
             tile_spacing,
         });
@@ -1820,14 +1919,70 @@ impl DisplayListBuilder {
         tile_spacing: LayoutSize,
         stops: &[di::GradientStop],
     ) {
+        if !gradient.is_valid() {
+            return;
+        }
+
         let (common, offset) = self.normalize_common(common);
+        let mut prim_rect = self.shift_rect(bounds, offset);
+
+        let mut tile_size = resolve_tile_size(&prim_rect, tile_size);
+
+        let stop_keys: Vec<GradientStopKey> = stops
+            .iter()
+            .map(|stop| GradientStopKey {
+                offset: stop.offset,
+                color: stop.color.into(),
+            })
+            .collect();
+
+        let mut center = gradient.center;
+        let mut tile_spacing = tile_spacing;
+        let mut aa_mask = EdgeMask::all();
+
+        // Shrinks the gradient to the part that is not a constant colour and
+        // emits the margins around it as solid rects.
+        optimize_radial_gradient(
+            &mut prim_rect,
+            &mut tile_size,
+            &mut center,
+            &mut tile_spacing,
+            &mut aa_mask,
+            &common.clip_rect,
+            gradient.radius,
+            gradient.end_offset,
+            gradient.extend_mode,
+            &stop_keys,
+            &mut |solid_rect, color, aa_mask| {
+                // Pushed before the gradient, and unconditionally: a gradient
+                // that optimizes away entirely is all margin.
+                self.push_item(&di::DisplayItem::Rectangle(di::RectangleDisplayItem {
+                    common,
+                    bounds: *solid_rect,
+                    color: PropertyBinding::Value(color.into()),
+                    transformed_aa_edges: aa_mask,
+                }));
+            },
+        );
+
+        // `radial_gradient_prim` runs this too but discards the rect it
+        // produces, so the mutation has to happen out here.
+        simplify_repeated_primitive(&tile_size, &mut tile_spacing, &mut prim_rect);
+
+        // A tile that rounds up to nothing covers no pixel. The margins above
+        // are already out.
+        if tile_size.ceil().is_empty() {
+            return;
+        }
+
         self.push_stops(stops);
         let item = di::DisplayItem::RadialGradient(di::RadialGradientDisplayItem {
             common,
-            bounds: self.shift_rect(bounds, offset),
-            gradient,
+            bounds: prim_rect,
+            gradient: di::RadialGradient { center, ..gradient },
             tile_size,
             tile_spacing,
+            transformed_aa_edges: aa_mask,
         });
 
         self.push_item(&item);
@@ -1845,12 +2000,31 @@ impl DisplayListBuilder {
         tile_spacing: LayoutSize,
         stops: &[di::GradientStop],
     ) {
+        if !gradient.is_valid() {
+            return;
+        }
+
         let (common, offset) = self.normalize_common(common);
+        let mut bounds = self.shift_rect(bounds, offset);
+
+        let tile_size = resolve_tile_size(&bounds, tile_size);
+
+        let clip_offset =
+            apply_gradient_local_clip(&mut bounds, &tile_size, &tile_spacing, &common.clip_rect);
+
+        // A tile that rounds up to nothing covers no pixel.
+        if tile_size.ceil().is_empty() {
+            return;
+        }
+
         self.push_stops(stops);
         let item = di::DisplayItem::ConicGradient(di::ConicGradientDisplayItem {
             common,
-            bounds: self.shift_rect(bounds, offset),
-            gradient,
+            bounds,
+            gradient: di::ConicGradient {
+                center: gradient.center + clip_offset,
+                ..gradient
+            },
             tile_size,
             tile_spacing,
         });
@@ -2584,6 +2758,7 @@ impl DisplayListBuilder {
                 common: shift(info.common),
                 bounds: info.bounds.translate(offset),
                 color: PropertyBinding::Value(color),
+                transformed_aa_edges: info.transformed_aa_edges,
             }),
             Text(info) => Text(di::TextDisplayItem {
                 common: shift(info.common),

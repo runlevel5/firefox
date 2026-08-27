@@ -104,6 +104,22 @@ add_task(async function test_smart_form_fill_with_address_results() {
             "The Smart Form Fill row is present"
           );
 
+          const displayedItems = getDisplayedPopupItems(browser);
+          const footer = displayedItems.find(candidate =>
+            candidate.hasAttribute("footer")
+          );
+          Assert.ok(footer, "The Manage addresses footer is present");
+          Assert.less(
+            displayedItems.indexOf(addressItems.at(-1)),
+            displayedItems.indexOf(smartFormFillItems[0]),
+            "The Smart Form Fill row comes after the address rows"
+          );
+          Assert.less(
+            displayedItems.indexOf(smartFormFillItems[0]),
+            displayedItems.indexOf(footer),
+            "The Smart Form Fill row comes before the footer"
+          );
+
           const row = smartFormFillItems[0].querySelector(
             "autocomplete-row-item"
           );

@@ -3,6 +3,10 @@
 
 "use strict";
 
+// SpecialPowers.spawn injects ContentTaskUtils in the scope of the callback.
+// Eslint doesn't know about that.
+/* global ContentTaskUtils */
+
 // Importing these libraries from newtab is normally forbidden for code that
 // executes in the browser, but since these are just tests, it's fine.
 const { DiscoveryStreamFeed } = ChromeUtils.importESModule(
@@ -238,6 +242,57 @@ add_task(async function test_firefoxhome_widgets_blocked() {
     },
   });
   await SpecialPowers.popPrefEnv();
+});
+
+add_task(async function test_firefoxhome_customize_panel_locked() {
+  await setupPolicyEngineWithJson({
+    policies: {
+      FirefoxHome: {
+        TopSites: false,
+        Locked: true,
+      },
+    },
+  });
+
+  let tab = await BrowserTestUtils.openNewForegroundTab({
+    gBrowser,
+    opening: "about:home",
+    waitForStateStop: true,
+  });
+
+  await SpecialPowers.spawn(tab.linkedBrowser, [], async function () {
+    let customizeButton = await ContentTaskUtils.waitForCondition(
+      () =>
+        content.document.querySelector(
+          ".personalize-button, .open-customization-button"
+        ),
+      "Wait for the customize button to load on the newtab page"
+    );
+    customizeButton.click();
+
+    let dialog = await ContentTaskUtils.waitForCondition(
+      () => content.document.querySelector("dialog.customize-menu[open]"),
+      "Wait for the customize panel to open"
+    );
+
+    // `disabled` is a lit reactive property, not a WebIDL attribute, so it is
+    // not visible through the Xray wrapper.
+    ok(
+      dialog.querySelector("#shortcuts-toggle").wrappedJSObject.disabled,
+      "Shortcuts toggle should be disabled when feeds.topsites is locked"
+    );
+    ok(
+      !dialog.querySelector("#row-selector").wrappedJSObject.disabled,
+      "Row selector should stay enabled when its own pref is not locked"
+    );
+  });
+
+  BrowserTestUtils.removeTab(tab);
+  await setupPolicyEngineWithJson({
+    policies: {
+      FirefoxHome: {},
+    },
+  });
 });
 
 add_task(async function test_firefoxhome_support_firefox_sponsored_locked() {

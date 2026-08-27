@@ -40,30 +40,28 @@ pub fn simplify_repeated_primitive(
     }
 }
 
-/// Snap a repeated primitive's tile size to the snapped prim-rect extent when
-/// it (fuzzily) matches the unsnapped extent, so the tile lands on the snapped
-/// pixel grid.
-pub fn process_repeat_size(
-    snapped_rect: &LayoutRect,
-    unsnapped_rect: &LayoutRect,
-    repeat_size: LayoutSize,
-) -> LayoutSize {
-    // FIXME(aosmond): The tile size is calculated based on several parameters
-    // during display list building. It may produce a slightly different result
-    // than the bounds due to floating point error accumulation, even though in
-    // theory they should be the same. We do a fuzzy check here to paper over
-    // that. It may make more sense to push the original parameters into scene
-    // building and let it do a saner calculation with more information (e.g.
-    // the snapped values).
+/// Make a tile that was meant to fill `prim_rect` on an axis fill it exactly.
+///
+/// Per-axis: a `repeat_size` extent within an epsilon of the prim rect's is
+/// replaced by the prim rect's, and anything further away is kept verbatim. A
+/// tile a hair short of the primitive would otherwise repeat, leaving a sliver
+/// of a second tile at the far edge.
+///
+/// FIXME(aosmond): The tile size is calculated from several parameters during
+/// display list building, and can come out slightly different from the bounds
+/// through accumulated floating point error even where the two are the same in
+/// theory. The fuzzy check papers over that; computing it exactly in the first
+/// place would be better than correcting it here.
+pub fn resolve_tile_size(prim_rect: &LayoutRect, repeat_size: LayoutSize) -> LayoutSize {
     const EPSILON: f32 = 0.001;
     LayoutSize::new(
-        if repeat_size.width.approx_eq_eps(&unsnapped_rect.width(), &EPSILON) {
-            snapped_rect.width()
+        if repeat_size.width.approx_eq_eps(&prim_rect.width(), &EPSILON) {
+            prim_rect.width()
         } else {
             repeat_size.width
         },
-        if repeat_size.height.approx_eq_eps(&unsnapped_rect.height(), &EPSILON) {
-            snapped_rect.height()
+        if repeat_size.height.approx_eq_eps(&prim_rect.height(), &EPSILON) {
+            prim_rect.height()
         } else {
             repeat_size.height
         },
@@ -103,6 +101,11 @@ pub fn compute_stretch_ratio(stretch_size: LayoutSize, prim_size: LayoutSize) ->
 /// Clip a (possibly tiled) gradient primitive to its local clip rect, returning
 /// the offset that must be applied to the gradient's start/center so the
 /// gradient stays aligned after the prim rect is shrunk.
+///
+/// If the gradient is not tiled then any content outside the clip cannot be
+/// shown, so applying the clip here reduces how much of the gradient gets
+/// rendered and cached. Done separately on each axis, since an axis can be
+/// tiled while the other is not.
 pub fn apply_gradient_local_clip(
     prim_rect: &mut LayoutRect,
     stretch_size: &LayoutSize,
@@ -145,6 +148,16 @@ pub fn apply_gradient_local_clip(
     offset
 }
 
+/// Perform a few optimizations to the gradient that are relevant to scene building.
+///
+/// Mutates `prim_rect`, `tile_size`, `start`, `end` to bake in the simplifications
+/// (repeated-tile collapse, equivalent-to-stretching on either axis, clip-induced
+/// offsets). Decomposition into per-segment quads is no longer done here -- the
+/// caller emits a single `LinearGradient` prim and prepare-time runs
+/// `decompose_axis_aligned_gradient` against the snapped prim_rect when the
+/// gradient is eligible. Doing the decomposition at frame-build keeps adjacent
+/// segments phase-aligned with the snapped outer prim, even when the frame-time
+/// snap pass nudges the outer rect.
 pub fn optimize_linear_gradient(
     prim_rect: &mut LayoutRect,
     tile_size: &mut LayoutSize,

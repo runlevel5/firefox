@@ -129,7 +129,8 @@ TextureType TexTypeForWebgl(KnowsCompositor* const knowsCompositor,
     if (gfx::gfxVars::UseAHardwareBufferSharedSurfaceWebglOop()) {
       return TextureType::AndroidHardwareBuffer;
     }
-    if (StaticPrefs::webgl_enable_surface_texture()) {
+    if (!gfx::gfxVars::UseWebRenderANGLE() &&
+        StaticPrefs::webgl_enable_surface_texture()) {
       return TextureType::AndroidNativeWindow;
     }
   }

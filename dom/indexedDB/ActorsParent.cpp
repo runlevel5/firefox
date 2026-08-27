@@ -14045,15 +14045,10 @@ nsresult DatabaseMaintenance::CheckIntegrity(mozIStorageConnection& aConnection,
   // First do a full integrity_check. Scope statements tightly here because
   // later operations require zero live statements.
   {
-    QM_TRY_INSPECT(const auto& stmt,
-                   CreateAndExecuteSingleStepStatement(
-                       aConnection, "PRAGMA integrity_check(1);"_ns));
+    QM_TRY_INSPECT(const bool& ok, DatabasePassesIntegrityCheck(
+                                       aConnection, IntegrityCheckMode::Full));
 
-    QM_TRY_INSPECT(const auto& result, MOZ_TO_RESULT_INVOKE_MEMBER_TYPED(
-                                           nsString, *stmt, GetString, 0));
-
-    QM_TRY(OkIf(result.EqualsLiteral("ok")), NS_OK,
-           [&aOk](const auto) { *aOk = false; });
+    QM_TRY(OkIf(ok), NS_OK, [&aOk](const auto) { *aOk = false; });
   }
 
   // Now enable and check for foreign key constraints.

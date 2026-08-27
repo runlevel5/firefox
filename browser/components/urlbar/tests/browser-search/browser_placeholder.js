@@ -20,6 +20,8 @@ const { UrlbarParentController } = ChromeUtils.importESModule(
   "moz-src:///browser/components/urlbar/UrlbarParentController.sys.mjs"
 );
 
+const NON_ASCII_ENGINE_NAME = "百度";
+
 const CONFIG = [
   {
     identifier: "defaultEngine",
@@ -39,9 +41,19 @@ const CONFIG = [
       classification: "general",
     },
   },
+  {
+    identifier: "nonAsciiEngine",
+    base: {
+      name: NON_ASCII_ENGINE_NAME,
+    },
+  },
 ];
 
-let appDefaultEngine, extraEngine, extraPrivateEngine, expectedString;
+let appDefaultEngine,
+  extraEngine,
+  extraPrivateEngine,
+  nonAsciiEngine,
+  expectedString;
 let tabs = [];
 
 let noEngineString;
@@ -82,6 +94,7 @@ add_setup(async function () {
     suggest_url: `${rootUrl}/searchSuggestionEngine.sjs`,
   });
   extraPrivateEngine = SearchService.getEngineByName("extraPrivateEngine");
+  nonAsciiEngine = SearchService.getEngineByName(NON_ASCII_ENGINE_NAME);
 
   // Force display of a tab with a URL bar, to clear out any possible placeholder
   // initialization listeners that happen on startup.
@@ -459,6 +472,29 @@ add_task(async function test_engine_change_while_engine_store_initializes() {
     "The placeholder should match the default placeholder for non-built-in engines."
   );
   Assert.equal(win.gURLBar.placeholder, noEngineString);
+
+  await SearchService.setDefault(
+    appDefaultEngine,
+    SearchService.CHANGE_REASON.UNKNOWN
+  );
+  await BrowserTestUtils.closeWindow(win);
+});
+
+add_task(async function test_non_ascii_engine_name() {
+  await SearchService.setDefault(
+    nonAsciiEngine,
+    SearchService.CHANGE_REASON.UNKNOWN
+  );
+
+  const win = await BrowserTestUtils.openNewBrowserWindow();
+  Assert.deepEqual(
+    win.document.l10n.getAttributes(win.gURLBar.inputField),
+    {
+      id: "urlbar-placeholder-with-name",
+      args: { name: NON_ASCII_ENGINE_NAME },
+    },
+    "New windows should have UTF-8 placeholder."
+  );
 
   await SearchService.setDefault(
     appDefaultEngine,

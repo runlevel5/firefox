@@ -285,6 +285,11 @@ void MacroAssembler::xor64(Imm64 imm, Register64 dest) {
   Eor(ARMRegister(dest.reg, 64), ARMRegister(dest.reg, 64), Operand(imm.value));
 }
 
+void MacroAssembler::nor32(Imm32 imm, Register src, Register dest) {
+  or32(imm, src, dest);
+  not32(dest);
+}
+
 // ===============================================================
 // Swap instructions
 

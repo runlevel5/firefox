@@ -567,9 +567,6 @@ contentblocking:
       ('pageLoad' = There was a page load, 'blocked' = at least one
       fingerprinter was blocked, 'allowed' = at least one fingerprinter was
       detected and allowed.) Note, pageLoad is used as a baseline measurement.
-
-      This metric was generated to correspond to the Legacy Telemetry
-      categorical histogram FINGERPRINTERS_BLOCKED_COUNT.
     labels:
       - pageLoad
       - blocked
@@ -582,7 +579,6 @@ contentblocking:
       - privacy-team@mozilla.org
       - seceng-telemetry@mozilla.com
     expires: never
-    telemetry_mirror: h#FINGERPRINTERS_BLOCKED_COUNT
 
   cryptominers_blocked_count:
     type: labeled_counter

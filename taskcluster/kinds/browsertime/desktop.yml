@@ -390,8 +390,6 @@ browsertime-benchmark:
                             by-app:
                                 safari-tp:
                                     - [speedometer3, sp3]
-                                    # Bug 1931699, jetstream permafailing
-                                    # - [jetstream2, js2]
                                     - [jetstream3, js3]
                                 safari:
                                     - [jetstream3, js3]
@@ -399,7 +397,6 @@ browsertime-benchmark:
                                     - [speedometer3, sp3]
                                     - [motionmark-1-3, mm-1.3]
                                     - [motionmark-htmlsuite-1-3, mm-h-1.3]
-                                    # - [jetstream2, js2] Disable jetstream2 on safari on all mac platforms
                                 default:
                                     - [jetstream3, js3]
                                     - [speedometer2, sp2]
@@ -407,7 +404,6 @@ browsertime-benchmark:
                                     - [speedometer-experimental, sp-exp]
                                     - [motionmark-1-3, mm-1.3]
                                     - [motionmark-htmlsuite-1-3, mm-h-1.3]
-                                    - [jetstream2, js2]
                         windows11-64-.*-hw-ref.*:
                             by-app:
                                 safari: []
@@ -419,7 +415,6 @@ browsertime-benchmark:
                             by-app:
                                 firefox:
                                     - [assorted-dom, dom]
-                                    - [jetstream2, js2]
                                     - [jetstream3, js3]
                                     - [matrix-react-bench, mrb]
                                     - [media-capabilities, mc]
@@ -434,7 +429,6 @@ browsertime-benchmark:
                                     - [webaudio, wa]
                                 safari:
                                     - [assorted-dom, dom]
-                                    # - [jetstream2, js2] Disable jetstream2 on safari on all mac platforms
                                     - [jetstream3, js3]
                                     # - [matrix-react-bench, mrb] Perma fails on osx 10.15.x machines (Bug 1807754)
                                     - [motionmark-1-3, mm-1.3]
@@ -453,7 +447,6 @@ browsertime-benchmark:
                                     - [jetstream3, js3]
                                 chrome:
                                     - [assorted-dom, dom]
-                                    - [jetstream2, js2]
                                     - [jetstream3, js3]
                                     - [matrix-react-bench, mrb]
                                     - [media-capabilities, mc]
@@ -467,7 +460,6 @@ browsertime-benchmark:
                                     - [webaudio, wa]
                                 default:
                                     - [assorted-dom, dom]
-                                    - [jetstream2, js2]
                                     - [jetstream3, js3]
                                     - [matrix-react-bench, mrb]
                                     - [motionmark-1-3, mm-1.3]
@@ -494,11 +486,6 @@ browsertime-benchmark:
                 by-subtest:
                     unity-webgl: 3
                     speedometer-experimental: 3
-                    jetstream2:
-                        by-test-platform:
-                            macosx1470.*shippable.*: 3
-                            macosx1500.*shippable.*: 3
-                            default: 2
                     jetstream3: 3
                     default: 2
 
@@ -591,7 +578,6 @@ browsertime-benchmark:
                 by-test-platform:
                     .*-qr/.*: 2100
                     default: 1500
-            jetstream2: 8000
             jetstream3: 3000
             matrix-react-bench: 1500
             motionmark-1-3: 3000

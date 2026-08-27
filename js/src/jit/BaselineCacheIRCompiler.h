@@ -129,6 +129,10 @@ class MOZ_RAII BaselineCacheIRCompiler : public CacheIRCompiler {
       mozilla::Maybe<bool> ignoresReturnValue,
       mozilla::Maybe<uint32_t> targetOffset,
       ClearLocalAllocSite clearLocalAllocSite = ClearLocalAllocSite::No);
+  bool emitCallBoundScriptedFunctionShared(
+      ObjOperandId calleeId, ObjOperandId targetId, Int32OperandId argcId,
+      CallFlags flags, uint32_t numBoundArgs,
+      mozilla::Maybe<uint32_t> icScriptOffset);
   void loadAllocSiteIntoContext(uint32_t siteOffset);
 
   enum class StringCode { CodeUnit, CodePoint };

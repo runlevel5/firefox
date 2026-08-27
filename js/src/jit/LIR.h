@@ -1710,6 +1710,13 @@ class LSafepoint : public TempObject {
   // Wasm only: with what kind of instruction is this LSafepoint associated?
   WasmSafepointKind wasmSafepointKind_;
 
+#ifdef DEBUG
+  // Set once this safepoint has been recorded in the codegen safepoint index.
+  // Used by CodeGeneratorShared::markSafepointAt to detect the "many-to-one"
+  // case (a single LSafepoint recorded at more than one offset) in O(1).
+  bool recordedInSafepointIndices_ = false;
+#endif
+
   // Wasm only: what is the value of masm.framePushed() that corresponds to
   // the lowest-addressed word covered by the StackMap that we will generate
   // from this LSafepoint?  This depends on the instruction:
@@ -1760,6 +1767,13 @@ class LSafepoint : public TempObject {
     assertInvariants();
   }
   const LiveRegisterSet& liveRegs() const { return liveRegs_; }
+#ifdef DEBUG
+  bool recordedInSafepointIndices() const {
+    return recordedInSafepointIndices_;
+  }
+  // A safepoint can be recorded at more than one index.
+  void setRecordedInSafepointIndices() { recordedInSafepointIndices_ = true; }
+#endif
 #ifdef CHECK_OSIPOINT_REGISTERS
   void addClobberedRegister(AnyRegister reg) {
     clobberedRegs_.addUnchecked(reg);

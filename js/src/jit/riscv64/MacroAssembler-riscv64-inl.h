@@ -1846,6 +1846,11 @@ void MacroAssembler::orPtr(Imm32 imm, Register src, Register dest) {
   ma_or(dest, src, imm);
 }
 
+void MacroAssembler::nor32(Imm32 imm, Register src, Register dest) {
+  or32(imm, src, dest);
+  not32(dest);
+}
+
 void MacroAssembler::popcnt32(Register input, Register output, Register tmp) {
   Popcnt32(output, input, tmp);
 }

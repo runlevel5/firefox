@@ -170,6 +170,36 @@ class AboutHomeBindingTest {
         }
 
     @Test
+    fun `GIVEN the unlock tabs tray screen is the currently shown WHEN URL is updated to ABOUT_HOME_URL THEN do not navigate to the homepage`() =
+        runTest(testDispatcher) {
+            val mockDestination: NavDestination = mockk()
+            every { mockDestination.id } returns R.id.unlockPrivateTabsFragment
+            every { navController.currentDestination } returns mockDestination
+
+            val binding =
+                AboutHomeBinding(
+                    browserStore = browserStore,
+                    navController = navController,
+                    mainDispatcher = testDispatcher,
+                )
+
+            binding.start()
+
+            browserStore.dispatch(
+                ContentAction.UpdateUrlAction(
+                    sessionId = tabId,
+                    url = ABOUT_HOME_URL,
+                )
+            )
+
+            testDispatcher.scheduler.advanceUntilIdle()
+
+            assertEquals(ABOUT_HOME_URL, tab.content.url)
+
+            verify(exactly = 0) { navController.navigate(NavGraphDirections.actionGlobalHome()) }
+        }
+
+    @Test
     fun `WHEN URL is updated to a URL that is not ABOUT_HOME_URL THEN do not navigate to the homepage`() =
         runTest(testDispatcher) {
             val binding =

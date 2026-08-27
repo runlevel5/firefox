@@ -32,8 +32,9 @@ let openUrlFun = url => (_queryContext, controller) =>
   openUrl(url, controller.browserWindow);
 let openUrl = (url, window) => {
   if (url.startsWith("about:")) {
-    window.switchToTabHavingURI(Services.io.newURI(url), true, {
-      ignoreFragment: "whenComparing",
+    let uri = Services.io.newURI(url);
+    window.switchToTabHavingURI(uri, true, {
+      ignoreFragment: uri.hasRef ? "whenComparingAndReplace" : "whenComparing",
     });
   } else {
     window.gBrowser.addTab(url, {

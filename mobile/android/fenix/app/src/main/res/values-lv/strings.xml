@@ -20,6 +20,8 @@
   <string name="browser_menu_add_to_homescreen">Pievienot sākuma ekrānam</string>
   <!-- Browser menu toggle that adds a PWA of the site on the device home screen. -->
   <string name="browser_menu_add_app_to_homescreen">Pievienot lietotni sākuma ekrānam</string>
+  <!-- Browser menu button that goes to the homepage screen -->
+  <string name="browser_menu_homepage">Sākumlapa</string>
   <!-- Title for the block AI enhancements toggle -->
   <string name="ai_controls_block_ai_title">Liegt MI uzlabojumus</string>
   <!-- Title for the block AI enhancements confirmation dialog -->
@@ -36,16 +38,22 @@
   <string name="search_settings_menu_item">Meklēšanas iestatījumi</string>
   <!-- ==== Project "Nova" onboarding strings ==== -->
 
+  <!-- "Set to default" onboarding button. -->
+  <string name="nova_onboarding_set_to_default_button">Iestatīt kā noklusējuma pārlūku</string>
   <!-- "Add search widget" onboarding button. 'Firefox' is intentionally hardcoded. -->
   <string name="nova_onboarding_add_search_widget_button" tools:ignore="BrandUsage">Pievienot Firefox logrīku</string>
   <!-- ==== End of Project "Nova" onboarding strings ==== -->
 
+  <!-- Preference for settings related to changing the default browser -->
+  <string name="preferences_set_as_default_browser">Iestatīt kā noklusējuma pārlūku</string>
   <!-- Preference for adding private browsing shortcut -->
   <string name="preferences_add_private_browsing_shortcut">Pievienot privātās pārlūkošanas īsceļu</string>
   <!-- Preference for accessibility -->
   <string name="preferences_accessibility">Piekļūstamība</string>
   <!-- Preference for changing where the AddressBar is positioned -->
   <string name="preferences_toolbar_2">Adrešu joslas atrašanās vieta</string>
+  <!-- Preference for customizing the home screen -->
+  <string name="preferences_home_2">Sākumlapa</string>
   <!-- Title of a menu option allowing to change the shortcut button shown in the toolbar -->
   <string name="toolbar_shortcut_menu_edit_option">Labot īsceļu</string>
   <!-- Preference for settings related to visual options -->
@@ -68,11 +76,19 @@
   <string name="addon_failure_retry_action">Atkārtot</string>
   <!-- Add bookmark shortcut in toolbar customization -->
   <string name="toolbar_customize_shortcut_add_bookmark">Pievienot grāmatzīmi</string>
+  <!-- Homepage shortcut in toolbar customization -->
+  <string name="toolbar_customize_shortcut_homepage">Sākumlapa</string>
   <!--
     Preference for using the OLED theme. For localization, this can be translated as "True Black", "Maximum Darkness",
     or "Full dark" if needed.
   -->
   <string name="preference_oled_theme">Vistumšākais</string>
+  <!-- Option for always opening the homepage when re-opening the app -->
+  <string name="opening_screen_homepage">Sākumlapa</string>
+  <!-- Summary for homepage preference indicating always opening the homepage when re-opening the app -->
+  <string name="opening_screen_homepage_summary">Atvērt sākumlapā</string>
+  <!-- Summary for homepage preference indicating opening the homepage when re-opening the app after four hours of inactivity -->
+  <string name="opening_screen_after_four_hours_of_inactivity_summary">Atvērt sākumlapā pēc četrām stundām</string>
   <!-- Title for the preference to enable or disable the tab groups feature -->
   <string name="preferences_tab_groups_feature">Iespējot ciļņu kopas</string>
   <!--
@@ -91,6 +107,8 @@
   <string name="tab_manager_multiselect_menu_item_add_to_collection">Pievienot krājumam</string>
   <!-- Text shown in the multiselect menu for adding selected tabs to a tab group. -->
   <string name="tab_manager_multiselect_menu_item_add_to_tab_group">Pievienot kopai</string>
+  <!-- Title text displayed for a homepage tab in the tabs tray. -->
+  <string name="tab_tray_homepage_tab">Sākumlapa</string>
   <!-- Title for adding more tabs to a tab group. -->
   <string name="add_to_tab_group_title">Pievienot</string>
   <!-- Content Description for "New tab group" panel. -->
@@ -131,6 +149,13 @@
   <string name="create_collection_add_new_collection">Pievienot jaunu krājumu</string>
   <!-- Text displayed when sync is offline and cannot be accessed -->
   <string name="sync_offline">Bezsaistē</string>
+  <!-- Confirmation dialog button -->
+  <string name="sync_confirmation_button">Sapratu</string>
+  <!--
+    Text shown in the notification that pops up to remind the user to set fenix as default browser.
+    The app name is in the text, due to limitations with localizing Nimbus experiments
+  -->
+  <string name="nimbus_notification_default_browser_text" tools:ignore="BrandUsage,UnusedResources">Padarīt Firefox par noklusējuma pārlūku</string>
   <!-- Tab collection deletion prompt dialog message. %1$s is the collection name. -->
   <string name="tab_collection_dialog_message">Vai tiešām izdzēst %1$s?</string>
   <!--
@@ -201,6 +226,14 @@
   <string name="homepage_shortcuts_add_to_homepage">Pievienot sākumlapai</string>
   <!-- Label for the "Add website" button in the "Add to homepage" bottom sheet. -->
   <string name="homepage_shortcuts_add_website">Pievienot tīmekļvietni</string>
+  <!-- Confirmation dialog button text when top sites limit is reached. -->
+  <string name="top_sites_max_limit_confirmation_button">Labi, sapratu</string>
+  <!--
+    Default browser experiment
+
+    Default browser card title
+  -->
+  <string name="default_browser_experiment_card_title">Nomainīt noklusējuma pārlūku</string>
   <!-- Translations feature -->
 
   <!-- Button text on the translations dialog when a translation error appears. -->
@@ -223,6 +256,12 @@
   <string name="debug_drawer_addons_tools_title">Papildinājumu rīki</string>
   <!-- TextField Design System Component -->
 
+  <!--
+    ===== Setup checklist feature: Task titles =====
+
+    The title of the default browser task for the setup checklist
+  -->
+  <string name="setup_checklist_task_default_browser">Iestatīt kā noklusējuma pārlūku</string>
   <!--
     Settings Search Strings
 

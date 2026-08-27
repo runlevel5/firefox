@@ -8,7 +8,7 @@
 # documentation and how to modify this file.
 repo: mozilla-central
 created_at: '2021-10-14T12:50:40.073465'
-updated_at: '2026-08-24T17:25:03.222617+00:00'
+updated_at: '2026-08-26T08:46:25.532097+00:00'
 export:
   path: ./docs/mots/index.md
   format: md
@@ -1306,6 +1306,7 @@ modules:
     description: Integration of AI tools for Firefox development, including AI coding
       assistants.
     includes:
+      - .agents/**/*
       - AGENTS.md
       - docs/ai-agent-tools/**/*
       - CLAUDE.md
@@ -4868,5 +4869,5 @@ modules:
         - Ryan Tilder
       group: dev-platform
 hashes:
-  config: 9d469683f9bad0bb961fac970c35b5cd0740325b
-  export: 3351e39ae160bc11f18d12c59fbcd1246c49c264
+  config: 2a527868daa58f879b3f1ad9feb19f5573158362
+  export: fa50618a86a1ec2c9bff94fdf93f978b870927dc

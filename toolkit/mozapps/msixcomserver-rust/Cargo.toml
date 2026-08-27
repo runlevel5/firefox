@@ -5,22 +5,22 @@ edition = "2024"
 license = "MPL-2.0"
 
 [dependencies]
-# `mozbuild::config::MOZ_APP_NAME` is used to locate firefox.exe.
+futures-executor = "0.3"
 mozbuild = "0.1"
 mozilla-central-workspace-hack = { version = "0.1", features = [
     "msixcomserver_s",
 ], optional = true }
 windows-core = "0.62"
+windows-future = "0.3"
 
 [dependencies.windows]
 version = "0.62"
 features = [
     "Foundation",
+    "ApplicationModel",
     "ApplicationModel_Background",
     "Win32_Foundation",
-    "Win32_System_Com",
-    "Win32_System_LibraryLoader",
-    "Win32_System_Threading",
+    "Win32_System_WinRT",
 ]
 
 [lib]

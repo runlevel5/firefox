@@ -39,6 +39,7 @@ import org.junit.runner.RunWith
 import org.mockito.Mockito.doAnswer
 import org.mockito.Mockito.doNothing
 import org.mockito.Mockito.doReturn
+import org.mockito.Mockito.doThrow
 import org.mockito.Mockito.spy
 import org.mockito.Mockito.verify
 
@@ -130,6 +131,46 @@ class CopyDownloadFeatureTest {
 
             assertTrue("Cache not empty. Found: $remainingFiles", remainingFiles.isEmpty())
         }
+
+    @Test
+    fun `a failing cleanup is handled instead of escaping the init coroutine`() =
+        runTest(testDispatcher) {
+            doThrow(RuntimeException("cache unavailable")).`when`(context).cacheDir
+
+            createFeature()
+            testDispatcher.scheduler.advanceUntilIdle()
+        }
+
+    @Test
+    fun `cleanupCache tolerates a cache entry removed while it is running`() {
+        val copyFeature = spy(createFeature())
+        // deleteRecursively() reads isFile to choose a walk strategy and asserts on it again;
+        // an entry that disappears between the two reads is what throws.
+        val racedEntry = mock<File>()
+        doReturn(true, false).`when`(racedEntry).isFile
+        val cacheDir = mock<File>()
+        doReturn(arrayOf(racedEntry)).`when`(cacheDir).listFiles()
+        doReturn(cacheDir).`when`(copyFeature).getCacheDirectory()
+
+        copyFeature.cleanupCache()
+    }
+
+    @Test
+    fun `cleanupCache deletes later entries after one that cannot be removed`() {
+        val copyFeature = spy(createFeature())
+        val locked = mock<File>()
+        doReturn(true).`when`(locked).isFile
+        doReturn(true).`when`(locked).exists()
+        doReturn(false).`when`(locked).delete()
+        val deletable = File(temporaryFolder.root, "deletable").apply { createNewFile() }
+        val cacheDir = mock<File>()
+        doReturn(arrayOf(locked, deletable)).`when`(cacheDir).listFiles()
+        doReturn(cacheDir).`when`(copyFeature).getCacheDirectory()
+
+        copyFeature.cleanupCache()
+
+        assertFalse(deletable.exists())
+    }
 
     @Test
     fun `startCopy() will download and then copy the selected download`() =
@@ -335,6 +376,7 @@ class CopyDownloadFeatureTest {
             tabId,
             confirmationAction,
             client,
+            testDispatcher,
             testDispatcher,
         )
     }

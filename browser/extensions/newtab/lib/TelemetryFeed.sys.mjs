@@ -73,6 +73,15 @@ const PREF_SOV_FRECENCY_EXPOSURE = "sov.frecency.exposure";
 
 const TOP_STORIES_SECTION_NAME = "top_stories_section";
 
+// Activity notifications that ignore synthesized pointer moves, unlike the
+// plain user-interaction-active topic. EventStateManager fires "active" when
+// interaction starts and at each user_interaction_interval while it continues,
+// then "inactive" at the first interval with no input. The notification at the
+// start of a run only fires after a full idle period, so interaction that
+// resumes within a run can go unnoticed for up to one interval.
+const USER_INTERACTION_ACTIVE = "user-interaction-active-non-synthesized";
+const USER_INTERACTION_INACTIVE = "user-interaction-inactive-non-synthesized";
+
 /**
  * Glean session types for OHTTP ping optimization.
  * Determines whether events are queued or sent immediately to OHTTP ping.
@@ -169,6 +178,15 @@ export class TelemetryFeed {
    * Events are stored here and cleared at session end based on session type.
    */
   #eventBuffer = [];
+
+  /** Whether the user is currently interacting. Drives the dwell stopwatches. */
+  #userActive = false;
+
+  /**
+   * When the last "active" notification arrived, i.e. the most recent moment we
+   * know the user was interacting. Null before the first one.
+   */
+  #lastActiveAt = null;
 
   constructor() {
     this.sessions = new Map();
@@ -496,6 +514,8 @@ export class TelemetryFeed {
         this.browserOpenNewtabStart,
         "browser-open-newtab-start"
       );
+      Services.obs.addObserver(this, USER_INTERACTION_ACTIVE);
+      Services.obs.addObserver(this, USER_INTERACTION_INACTIVE);
     }
 
     // Set two scalars for the "deletion-request" ping (See bug 1602064 and 1729474)
@@ -700,6 +720,10 @@ export class TelemetryFeed {
         load_trigger_type,
         is_preloaded: false,
       },
+      // Dwell stopwatch: time accrued so far, and when the current run started
+      // (null when stopped).
+      dwellTimeMs: 0,
+      dwellStartedAt: null,
     };
 
     if (load_trigger_ts) {
@@ -732,11 +756,22 @@ export class TelemetryFeed {
       return;
     }
 
+    this.#stopDwellClock(session);
+
     Glean.newtab.closed.record({ newtab_visit_id: session.session_id });
     if (
       this.telemetryEnabled &&
       Services.prefs.getBoolPref(PREF_NEWTAB_PING_ENABLED, true)
     ) {
+      // Record before the submit below: submitting clears ping-lifetime
+      // metrics, so a later value would never be sent. Recording here rather
+      // than unconditionally also keeps a session from leaving a sample behind
+      // for a later ping to pick up when no ping is submitted for this one.
+      const dwellMs = Math.round(session.dwellTimeMs);
+      if (dwellMs > 0) {
+        Glean.newtab.dwellTime.accumulateSingleSample(dwellMs);
+      }
+
       // clear event buffer based on session type
       const recordToContentPing =
         this.gleanSessionType === GleanSessionType.PrivateGleanSession;
@@ -774,6 +809,119 @@ export class TelemetryFeed {
   }
 
   /**
+   * The frontmost window, or null if Firefox is not the active application.
+   * Separate from isSessionInForeground so tests can stub it.
+   *
+   * @returns {Window|null}
+   */
+  getActiveChromeWindow() {
+    return Services.focus.activeWindow;
+  }
+
+  /**
+   * Monotonic time in milliseconds. A method so tests can stub the clock.
+   *
+   * @returns {number}
+   */
+  now() {
+    return ChromeUtils.now();
+  }
+
+  /**
+   * Whether this session's newtab is the selected tab of the frontmost window.
+   * A preloaded newtab never qualifies because its browser isn't in a tab yet.
+   *
+   * Known gap: dragging the tab to another window gives it a new <browser>, so
+   * the session stops qualifying, and accruing, for the rest of its life.
+   *
+   * @param  {obj} session a session from this.sessions
+   * @param  {Window|null} [activeWindow] the frontmost window, read if omitted
+   * @returns {boolean}
+   */
+  isSessionInForeground(session, activeWindow = this.getActiveChromeWindow()) {
+    const browser = session.browserRef?.deref();
+    const win = browser?.documentGlobal;
+    return (
+      !!win &&
+      !win.closed &&
+      win === activeWindow &&
+      win.gBrowser?.selectedBrowser === browser
+    );
+  }
+
+  /**
+   * Interaction is under way. Start the stopwatch for the newtab in front of
+   * the user, and stop it for every other session.
+   *
+   * Foreground is rechecked on every notification, not just on
+   * active/inactive changes. No foreground signal reaches this feed, so these
+   * notifications are also how often we sample it.
+   */
+  #onUserInteractionActive() {
+    this.#userActive = true;
+    const now = this.now();
+    this.#lastActiveAt = now;
+    // Read once for the whole sweep, and only when a session might ask for it.
+    const activeWindow = this.sessions.size
+      ? this.getActiveChromeWindow()
+      : null;
+
+    for (const session of this.sessions.values()) {
+      if (this.isSessionInForeground(session, activeWindow)) {
+        session.dwellStartedAt ??= now;
+      } else {
+        this.#stopDwellClock(session, now);
+      }
+    }
+  }
+
+  /**
+   * The last interval saw no interaction, so stop every stopwatch. Credit only
+   * up to the last notification that said the user was there. Using that
+   * timestamp rather than subtracting the interval pref keeps the cutoff exact
+   * when the timer is late or the clock jumps.
+   */
+  #onUserInteractionInactive() {
+    this.#userActive = false;
+    const cutoff = this.#lastActiveAt ?? this.now();
+    for (const session of this.sessions.values()) {
+      this.#stopDwellClock(session, cutoff);
+    }
+  }
+
+  /**
+   * Start a session's stopwatch if the user is already interacting when the
+   * newtab becomes visible. Without this, a visit shorter than one interval
+   * would see no notification and record nothing.
+   *
+   * @param  {obj} session a session from this.sessions
+   */
+  #startDwellClockIfActive(session) {
+    if (
+      session.dwellStartedAt === null &&
+      this.#userActive &&
+      this.isSessionInForeground(session)
+    ) {
+      session.dwellStartedAt = this.now();
+    }
+  }
+
+  /**
+   * Stop a session's stopwatch, crediting time up to `cutoff`. Clamped at zero,
+   * so a run that started after `cutoff` adds nothing instead of subtracting.
+   *
+   * @param  {obj} session a session from this.sessions
+   * @param  {number} [cutoff] a this.now() timestamp, defaulting to now
+   */
+  #stopDwellClock(session, cutoff = this.now()) {
+    if (session.dwellStartedAt === null) {
+      return;
+    }
+    session.dwellTimeMs += Math.max(0, cutoff - session.dwellStartedAt);
+    session.dwellStartedAt = null;
+  }
+
+  /**
    * handleNewTabInit - Handle NEW_TAB_INIT, which creates a new session and sets the a flag
    *                    for session.perf based on whether or not this new tab is preloaded
    *
@@ -786,6 +934,10 @@ export class TelemetryFeed {
     );
     session.perf.is_preloaded =
       action.data.browser.getAttribute("preloadedState") === "preloaded";
+    // Weak, so a session that never gets NEW_TAB_UNLOAD cannot keep a <browser>
+    // alive past its tab. The preloaded-browser swap reuses this element, so
+    // the reference survives it.
+    session.browserRef = new WeakRef(action.data.browser);
   }
 
   /**
@@ -2554,6 +2706,7 @@ export class TelemetryFeed {
 
     if (data.visibility_event_rcvd_ts && !session.newtabOpened) {
       session.newtabOpened = true;
+      this.#startDwellClockIfActive(session);
       const source = ONBOARDING_ALLOWED_PAGE_VALUES.includes(session.page)
         ? session.page
         : "other";
@@ -2588,6 +2741,17 @@ export class TelemetryFeed {
   }
 
   observe(subject, topic, data) {
+    // Before the pref branch below, which switches on `data` and would read
+    // these topics' null data as a pref name.
+    switch (topic) {
+      case USER_INTERACTION_ACTIVE:
+        this.#onUserInteractionActive();
+        return;
+      case USER_INTERACTION_INACTIVE:
+        this.#onUserInteractionInactive();
+        return;
+    }
+
     if (data === TOP_SITES_BLOCKED_SPONSORS_PREF) {
       this._setBlockedSponsorsMetrics();
     } else if (data === TOPIC_SELECTION_SELECTED_TOPICS_PREF) {
@@ -2663,10 +2827,16 @@ export class TelemetryFeed {
         this.browserOpenNewtabStart,
         "browser-open-newtab-start"
       );
+      Services.obs.removeObserver(this, USER_INTERACTION_ACTIVE);
+      Services.obs.removeObserver(this, USER_INTERACTION_INACTIVE);
+      this.#userActive = false;
+      this.#lastActiveAt = null;
       this._initialized = false;
     }
 
     // TODO: The sessions still in this.sessions are not reported as ended;
-    // only their buffered events are flushed above.
+    // only their buffered events are flushed above. They also drop whatever
+    // dwell time they accrued, which biases newtab.dwell_time low. The newtab
+    // in front of the user at shutdown is the one most likely to have some.
   }
 }

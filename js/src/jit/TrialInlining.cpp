@@ -217,6 +217,14 @@ Maybe<InlinableOpData> FindInlinableOpData(ICCacheIRStub* stub,
   return mozilla::Nothing();
 }
 
+// We currently only inline bound functions with no bound arguments or
+// new.target.
+// TODO (bug 2066335): Support bound functions with up to MaxInlineBoundArgs
+// arguments.
+static bool CanInlineBoundCall(uint32_t numBoundArgs, CallFlags flags) {
+  return numBoundArgs == 0 && !flags.isConstructing();
+}
+
 Maybe<InlinableCallData> FindInlinableCallData(ICCacheIRStub* stub) {
   Maybe<InlinableCallData> data;
 
@@ -273,6 +281,7 @@ Maybe<InlinableCallData> FindInlinableCallData(ICCacheIRStub* stub) {
           MOZ_ASSERT(data.isNothing());
           data.emplace();
           data->endOfSharedPrefix = opStart;
+          data->calleeOperand = args.calleeId;
         }
         break;
       }
@@ -286,6 +295,46 @@ Maybe<InlinableCallData> FindInlinableCallData(ICCacheIRStub* stub) {
           MOZ_ASSERT(data.isNothing());
           data.emplace();
           data->endOfSharedPrefix = opStart;
+          data->calleeOperand = args.calleeId;
+          uintptr_t rawICScript =
+              stubInfo->getStubRawWord(stubData, args.icScriptOffset);
+          data->icScript = reinterpret_cast<ICScript*>(rawICScript);
+        }
+        break;
+      }
+      case CacheOp::CallBoundScriptedFunction: {
+        auto args = reader.argsForCallBoundScriptedFunction();
+        flags = args.flags;
+
+        if (args.targetId == calleeGuardOperand) {
+          MOZ_ASSERT(args.argcId.id() == 0);
+          MOZ_ASSERT(data.isNothing());
+          if (!CanInlineBoundCall(args.numBoundArgs, args.flags)) {
+            return mozilla::Nothing();
+          }
+          data.emplace();
+          data->endOfSharedPrefix = opStart;
+          data->isBound = true;
+          data->calleeOperand = args.calleeId;
+          data->boundTargetOperand = args.targetId;
+          data->numBoundArgs = args.numBoundArgs;
+        }
+        break;
+      }
+      case CacheOp::CallInlinedBoundFunction: {
+        auto args = reader.argsForCallInlinedBoundFunction();
+        flags = args.flags;
+
+        if (args.targetId == calleeGuardOperand) {
+          MOZ_ASSERT(args.argcId.id() == 0);
+          MOZ_ASSERT(data.isNothing());
+          MOZ_ASSERT(CanInlineBoundCall(args.numBoundArgs, args.flags));
+          data.emplace();
+          data->endOfSharedPrefix = opStart;
+          data->isBound = true;
+          data->calleeOperand = args.calleeId;
+          data->boundTargetOperand = args.targetId;
+          data->numBoundArgs = args.numBoundArgs;
           uintptr_t rawICScript =
               stubInfo->getStubRawWord(stubData, args.icScriptOffset);
           data->icScript = reinterpret_cast<ICScript*>(rawICScript);
@@ -309,7 +358,6 @@ Maybe<InlinableCallData> FindInlinableCallData(ICCacheIRStub* stub) {
         flags.getArgFormat() != CallFlags::FunCall) {
       return mozilla::Nothing();
     }
-    data->calleeOperand = calleeGuardOperand;
     data->callFlags = flags;
     data->target = targetScript;
   }
@@ -858,9 +906,15 @@ bool TrialInliner::maybeInlineCall(ICEntry& entry, ICFallbackStub* fallback,
   Int32OperandId argcId(writer.setInputOperandId(0));
   cloneSharedPrefix(stub, data->endOfSharedPrefix, writer);
 
-  writer.callInlinedFunction(data->calleeOperand, argcId, newICScript,
-                             data->callFlags,
-                             ClampFixedArgc(loc.getCallArgc()));
+  if (data->isBound) {
+    writer.callInlinedBoundFunction(
+        data->calleeOperand, data->boundTargetOperand, argcId, data->callFlags,
+        newICScript, data->numBoundArgs);
+  } else {
+    writer.callInlinedFunction(data->calleeOperand, argcId, newICScript,
+                               data->callFlags,
+                               ClampFixedArgc(loc.getCallArgc()));
+  }
 
   return replaceICStub(entry, fallback, writer, CacheKind::Call);
 }

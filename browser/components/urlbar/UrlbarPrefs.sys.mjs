@@ -20,7 +20,7 @@ const lazy = XPCOMUtils.declareLazy({
 const PREF_URLBAR_BRANCH = "browser.urlbar.";
 
 /**
- * @typedef {boolean|number|string|[number, string]} PreferenceDefaultAndType
+ * @typedef {boolean|number|string|[number|string, string]} PreferenceDefaultAndType
  * Prefs are defined as [pref name, default value] or [pref name, [default
  * value, type]]. In the former case, the getter method name is inferred from
  * the typeof the default value.
@@ -298,8 +298,8 @@ const PREF_URLBAR_DEFAULTS = /** @type {PreferenceDefinition[]} */ ([
   // The cached name of the (private) default engine.
   // This is used to initialize the placeholder of the
   // urlbar before the search engine store is ready.
-  ["placeholderName", ""],
-  ["placeholderName.private", ""],
+  ["placeholderName", ["", "utf8"]],
+  ["placeholderName.private", ["", "utf8"]],
 
   // If disabled, QuickActions will not be included in either the default search
   // mode or the QuickActions search mode.
@@ -821,6 +821,8 @@ const PREF_TYPES = new Map([
   ["float", "Float"],
   ["number", "Int"],
   ["string", "Char"],
+  // Prefs that can hold non-ASCII must be declared "utf8".
+  ["utf8", "String"],
 ]);
 
 let inParent =

@@ -2083,7 +2083,7 @@ media:
       - 1570634
       - 1652108
     description: >
-      The number of times a document hierarchy contained at least one HTMLMediaElement. In addition, the telemetry probe 'MIXED_CONTENT_UNBLOCK_COUNTER' records the total number of loaded top level content documents, which can help us calculate the result of the percentage of documents using media.
+      The number of times a document hierarchy contained at least one HTMLMediaElement.
     expires: never
     kind: uint
     notification_emails:

@@ -721,7 +721,9 @@ export class UrlbarView {
       this.#blobUrlsByResultUrl.clear();
     }
 
-    if (isShowingZeroPrefix) {
+    // TODO(bug 2066165): These counters have no per-SAP dimension, so they only
+    // cover the address bar.
+    if (isShowingZeroPrefix && this.input.sapName == "urlbar") {
       if (elementPicked) {
         Glean.urlbarZeroprefix.engagement.add(1);
       } else {
@@ -948,8 +950,10 @@ export class UrlbarView {
       this.clear();
     }
 
-    // Now that the view has finished updating for this query, record the exposure.
-    if (!queryContext.searchString) {
+    // Now that the view has finished updating for this query, record the
+    // exposure. TODO(bug 2066165): This counter has no per-SAP dimension, so it
+    // only covers the address bar.
+    if (!queryContext.searchString && this.input.sapName == "urlbar") {
       Glean.urlbarZeroprefix.exposure.add(1);
     }
 

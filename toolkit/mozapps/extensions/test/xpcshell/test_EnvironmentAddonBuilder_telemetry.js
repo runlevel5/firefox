@@ -27,8 +27,6 @@ const MILLISECONDS_PER_MINUTE = 60 * 1000;
 const MILLISECONDS_PER_HOUR = 60 * MILLISECONDS_PER_MINUTE;
 const MILLISECONDS_PER_DAY = 24 * MILLISECONDS_PER_HOUR;
 
-AddonTestUtils.init(this);
-AddonTestUtils.overrideCertDB();
 createAppInfo(APP_ID, APP_NAME, APP_VERSION, PLATFORM_VERSION);
 
 // As we're not running in application, we need to setup the built-in

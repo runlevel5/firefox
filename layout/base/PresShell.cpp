@@ -4469,7 +4469,9 @@ void PresShell::HandlePostedReflowCallbacks(bool aInterruptible) {
     // The flush might cause us to have more callbacks.
     const auto flushType =
         aInterruptible ? FlushType::InterruptibleLayout : FlushType::Layout;
-    FlushPendingNotifications(flushType);
+    FlushPendingNotifications(ChangesToFlush(flushType,
+                                             /* aFlushAnimations = */ false,
+                                             /* aUpdateRelevancy = */ false));
   }
 }
 
@@ -4542,7 +4544,7 @@ void PresShell::DoFlushPendingNotifications(mozilla::ChangesToFlush aFlush) {
     UpdateRelevancyOfContentVisibilityAutoFrames();
   }
 
-  MOZ_ASSERT(NeedFlush(flushType), "Why did we get called?");
+  MOZ_ASSERT(NeedFlush(aFlush), "Why did we get called?");
 
   AUTO_PROFILER_MARKER_TEXT(
       "DoFlushPendingNotifications", LAYOUT,

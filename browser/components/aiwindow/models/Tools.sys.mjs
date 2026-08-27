@@ -38,6 +38,8 @@ ChromeUtils.defineESModuleGetters(lazy, {
   setTimeout: "resource://gre/modules/Timer.sys.mjs",
   MemoriesManager:
     "moz-src:///browser/components/aiwindow/models/memories/MemoriesManager.sys.mjs",
+  SessionStore:
+    "moz-src:///browser/components/sessionstore/SessionStore.sys.mjs",
   SmartWindowNavigationInfo:
     "moz-src:///browser/components/aiwindow/models/SmartWindowNavigationInfo.sys.mjs",
   ToolUITelemetry:
@@ -242,7 +244,8 @@ export const toolsConfig = [
       name: GET_OPEN_TABS,
       description:
         `Access the user's browser and return up to ${MAX_TABS} currently open tabs, ` +
-        "ordered by most recently viewed.",
+        "ordered by most recently viewed. Tabs sharing a `windowId` are in the same " +
+        "browser window.",
       parameters: {
         type: "object",
         properties: {},
@@ -486,6 +489,7 @@ export function getTabList(amount = MAX_TABS) {
     }
 
     if (!win.closed && win.gBrowser) {
+      const windowId = lazy.SessionStore.getWindowId(win);
       for (const tab of win.gBrowser.tabs) {
         const browser = tab.linkedBrowser;
         const url = browser?.currentURI?.spec;
@@ -496,6 +500,7 @@ export function getTabList(amount = MAX_TABS) {
             url,
             title: sanitizeUntrustedContent(title),
             lastAccessed: tab.lastAccessed,
+            windowId,
           });
         }
       }
@@ -514,6 +519,7 @@ export function getTabList(amount = MAX_TABS) {
  * @property {string} url - The url of the tab.
  * @property {string} title - Title of the tab.
  * @property {number} lastAccessed - When the tab was last accessed in milliseconds.
+ * @property {string|null} windowId - SessionStore ID of the browser window.
  */
 
 /**

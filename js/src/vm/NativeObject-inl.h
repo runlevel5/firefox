@@ -595,7 +595,7 @@ MOZ_ALWAYS_INLINE bool NativeObject::canDoSetPropertyFastpath() const {
   const JSClass* clasp = getClass();
   if (clasp->getAddProperty() || clasp->getResolve() ||
       clasp->getOpsDefineProperty() || clasp->getOpsLookupProperty() ||
-      clasp->getOpsSetProperty() || hasUnpreservedWrapper()) {
+      clasp->getOpsSetProperty()) {
     return false;
   }
 
@@ -919,6 +919,7 @@ MOZ_ALWAYS_INLINE bool AddDataPropertyToNativeObjectNoHooks(
   obj->initSlot(*resultSlot, v);
 
   MOZ_ASSERT(obj->canDoSetPropertyFastpath());
+  MOZ_ASSERT(!obj->hasUnpreservedWrapper());
   return true;
 }
 

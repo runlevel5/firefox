@@ -1267,6 +1267,9 @@
       "chrome://remote/content/shared/webdriver/Certificates.sys.mjs": [
         "../../../remote/shared/webdriver/Certificates.sys.mjs"
       ],
+      "chrome://remote/content/shared/webdriver/ConnectionPrompt.sys.mjs": [
+        "../../../remote/shared/webdriver/ConnectionPrompt.sys.mjs"
+      ],
       "chrome://remote/content/shared/webdriver/Errors.sys.mjs": [
         "../../../remote/shared/webdriver/Errors.sys.mjs"
       ],
@@ -4330,6 +4333,9 @@
       "resource://devtools/client/shared/remote-debugging/adb/adb-device.js": [
         "../../../devtools/client/shared/remote-debugging/adb/adb-device.js"
       ],
+      "resource://devtools/client/shared/remote-debugging/adb/adb-logger.js": [
+        "../../../devtools/client/shared/remote-debugging/adb/adb-logger.js"
+      ],
       "resource://devtools/client/shared/remote-debugging/adb/adb-process.js": [
         "../../../devtools/client/shared/remote-debugging/adb/adb-process.js"
       ],
@@ -5707,41 +5713,14 @@
       "resource://devtools/shared/worker/worker.sys.mjs": [
         "../../../devtools/shared/worker/worker.sys.mjs"
       ],
-      "resource://gre/actors/AutoCompleteParent.sys.mjs": [
-        "../../../toolkit/actors/AutoCompleteParent.sys.mjs"
-      ],
       "resource://gre/actors/FormHandlerChild.sys.mjs": [
         "../../../toolkit/components/satchel/FormHandlerChild.sys.mjs"
-      ],
-      "resource://gre/actors/MLEngineParent.sys.mjs": [
-        "../../../toolkit/components/ml/actors/MLEngineParent.sys.mjs"
-      ],
-      "resource://gre/actors/NetErrorParent.sys.mjs": [
-        "../../../toolkit/actors/NetErrorParent.sys.mjs"
       ],
       "resource://gre/actors/PageExtractorParent.sys.mjs": [
         "../../../toolkit/components/pageextractor/PageExtractorParent.sys.mjs"
       ],
-      "resource://gre/actors/PictureInPictureChild.sys.mjs": [
-        "../../../toolkit/actors/PictureInPictureChild.sys.mjs"
-      ],
-      "resource://gre/actors/PopupAndRedirectBlockingParent.sys.mjs": [
-        "../../../toolkit/actors/PopupAndRedirectBlockingParent.sys.mjs"
-      ],
-      "resource://gre/actors/RemotePageChild.sys.mjs": [
-        "../../../toolkit/actors/RemotePageChild.sys.mjs"
-      ],
-      "resource://gre/actors/SelectChild.sys.mjs": [
-        "../../../toolkit/actors/SelectChild.sys.mjs"
-      ],
-      "resource://gre/actors/SelectParent.sys.mjs": [
-        "../../../toolkit/actors/SelectParent.sys.mjs"
-      ],
       "resource://gre/actors/TranslationsParent.sys.mjs": [
         "../../../toolkit/components/translations/actors/TranslationsParent.sys.mjs"
-      ],
-      "resource://gre/actors/ViewSourcePageChild.sys.mjs": [
-        "../../../toolkit/actors/ViewSourcePageChild.sys.mjs"
       ],
       "resource://gre/modules/AboutPagesUtils.sys.mjs": [
         "../../../toolkit/modules/AboutPagesUtils.sys.mjs"
@@ -6796,6 +6775,9 @@
       "resource://gre/modules/narrate/VoiceSelect.sys.mjs": [
         "../../../toolkit/components/narrate/VoiceSelect.sys.mjs"
       ],
+      "resource://gre/modules/pdfjs.sys.mjs": [
+        "../../../toolkit/components/pdfjs/pdfjs.sys.mjs"
+      ],
       "resource://gre/modules/policies/PolicySchemaValidator.sys.mjs": [
         "../../../toolkit/components/enterprisepolicies/PolicySchemaValidator.sys.mjs"
       ],
@@ -7150,6 +7132,9 @@
       "resource://newtab/lib/Widgets/PrivacyMessages.sys.mjs": [
         "../../../browser/extensions/newtab/lib/Widgets/PrivacyMessages.sys.mjs"
       ],
+      "resource://newtab/lib/Widgets/RecentSearchesFeed.sys.mjs": [
+        "../../../browser/extensions/newtab/lib/Widgets/RecentSearchesFeed.sys.mjs"
+      ],
       "resource://newtab/lib/Widgets/SportsFeed.sys.mjs": [
         "../../../browser/extensions/newtab/lib/Widgets/SportsFeed.sys.mjs"
       ],
@@ -7293,6 +7278,9 @@
       ],
       "resource://normandy/lib/TelemetryEvents.sys.mjs": [
         "../../../toolkit/components/normandy/lib/TelemetryEvents.sys.mjs"
+      ],
+      "resource://pdf.js/PdfEmbedFallbackStreamConverter.sys.mjs": [
+        "../../../toolkit/components/pdfjs/content/PdfEmbedFallbackStreamConverter.sys.mjs"
       ],
       "resource://pdf.js/PdfJs.sys.mjs": [
         "../../../toolkit/components/pdfjs/content/PdfJs.sys.mjs"

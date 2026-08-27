@@ -3568,11 +3568,9 @@ bool BaselineCacheIRCompiler::emitCallScriptedProxyGetByValueResult(
 }
 #endif
 
-bool BaselineCacheIRCompiler::emitCallBoundScriptedFunction(
+bool BaselineCacheIRCompiler::emitCallBoundScriptedFunctionShared(
     ObjOperandId calleeId, ObjOperandId targetId, Int32OperandId argcId,
-    CallFlags flags, uint32_t numBoundArgs) {
-  JitSpew(JitSpew_Codegen, "%s", __FUNCTION__);
-
+    CallFlags flags, uint32_t numBoundArgs, Maybe<uint32_t> icScriptOffset) {
   AutoOutputRegister output(*this);
   AutoScratchRegister scratch(allocator, masm);
   AutoScratchRegisterMaybeOutput scratch2(allocator, masm, output);
@@ -3580,6 +3578,8 @@ bool BaselineCacheIRCompiler::emitCallBoundScriptedFunction(
 
   Register calleeReg = allocator.useRegister(masm, calleeId);
   Register argcReg = allocator.useRegister(masm, argcId);
+
+  bool isInlined = icScriptOffset.isSome();
 
   bool isConstructing = flags.isConstructing();
   bool isSameRealm = flags.isSameRealm();
@@ -3589,6 +3589,10 @@ bool BaselineCacheIRCompiler::emitCallBoundScriptedFunction(
   // Push a stub frame so that we can perform a non-tail call.
   AutoStubFrame stubFrame(*this);
   stubFrame.enter(masm, scratch);
+
+  if (isInlined) {
+    stubFrame.pushInlinedICScript(masm, stubAddress(*icScriptOffset));
+  }
 
   // Push all arguments, including |this|.
   pushBoundFunctionArguments(argcReg, calleeReg, scratch, scratch2, flags,
@@ -3612,12 +3616,17 @@ bool BaselineCacheIRCompiler::emitCallBoundScriptedFunction(
 
   // Load the start of the target JitCode.
   Register code = scratch2;
-  masm.loadJitCodeRaw(calleeReg, code);
+  if (isInlined) {
+    masm.loadJitCodeRawNoIon(calleeReg, code, scratch);
+  } else {
+    masm.loadJitCodeRaw(calleeReg, code);
+  }
 
   // Note that we use Push, not push, so that callJit will align the stack
   // properly on ARM.
   masm.PushCalleeToken(calleeReg, isConstructing);
-  masm.PushFrameDescriptorForJitCall(FrameType::BaselineStub, argcReg, scratch);
+  masm.PushFrameDescriptorForJitCall(FrameType::BaselineStub, argcReg, scratch,
+                                     isInlined);
 
   masm.callJit(code);
 
@@ -3632,6 +3641,23 @@ bool BaselineCacheIRCompiler::emitCallBoundScriptedFunction(
   }
 
   return true;
+}
+
+bool BaselineCacheIRCompiler::emitCallBoundScriptedFunction(
+    ObjOperandId calleeId, ObjOperandId targetId, Int32OperandId argcId,
+    CallFlags flags, uint32_t numBoundArgs) {
+  JitSpew(JitSpew_Codegen, "%s", __FUNCTION__);
+  return emitCallBoundScriptedFunctionShared(calleeId, targetId, argcId, flags,
+                                             numBoundArgs, mozilla::Nothing());
+}
+
+bool BaselineCacheIRCompiler::emitCallInlinedBoundFunction(
+    ObjOperandId calleeId, ObjOperandId targetId, Int32OperandId argcId,
+    CallFlags flags, uint32_t icScriptOffset, uint32_t numBoundArgs) {
+  JitSpew(JitSpew_Codegen, "%s", __FUNCTION__);
+  return emitCallBoundScriptedFunctionShared(calleeId, targetId, argcId, flags,
+                                             numBoundArgs,
+                                             mozilla::Some(icScriptOffset));
 }
 
 bool BaselineCacheIRCompiler::emitNewArrayObjectResult(uint32_t arrayLength,

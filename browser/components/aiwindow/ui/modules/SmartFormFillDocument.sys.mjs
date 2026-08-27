@@ -60,6 +60,13 @@ export const SUPPORTED_INPUT_TYPES = [
 
 /**
  * @typedef {{
+ *   id: string,
+ *   fields: Array<{ id: string, edited: boolean, isEmpty: boolean }>,
+ * }} FieldOutcomes The state the page saw for the fields one fill wrote to
+ */
+
+/**
+ * @typedef {{
  *  formId?: string,
  *  formLike: FormLike,
  *  fields: Array<SmartFormFillField>,
@@ -192,6 +199,29 @@ export class SmartFormFillDocument {
   #onFormUpdate;
 
   /**
+   * Callback to report what became of the fields that were filled
+   *
+   * @type {((outcomes: FieldOutcomes) => void) | null}
+   */
+  #onFieldOutcomes;
+
+  /**
+   * Callback to report which fields a fill wrote to
+   *
+   * @type {((filled: { id: string, fieldIds: Array<string> }) => void) | null}
+   */
+  #onFieldsFilled;
+
+  /**
+   * The fields the latest fill wrote to, and whether the user has typed in them
+   * since. No filled value is kept: an input event is what tells a field the
+   * user edited from one they left alone.
+   *
+   * @type {Map<string, { formId: string, edited: boolean }> | null}
+   */
+  #filledFields;
+
+  /**
    * Map to collect affected groups during rapid
    * form mutations.
    *
@@ -225,6 +255,9 @@ export class SmartFormFillDocument {
     this.#fieldsById = new Map();
     this.#fieldCounter = 0;
     this.#onFormUpdate = null;
+    this.#onFieldOutcomes = null;
+    this.#onFieldsFilled = null;
+    this.#filledFields = new Map();
     this.#formUpdateAffectedGroupsMap = null;
     this.#formUpdateTimeout = null;
   }
@@ -234,16 +267,25 @@ export class SmartFormFillDocument {
    * and runs initial field detection.
    *
    * @param {((formDataList: Array<FormData>) => void) | null} onFormUpdate Callback to handle form updates
+   * @param {((outcomes: FieldOutcomes) => void) | null} [onFieldOutcomes] Callback
+   * to report what became of the fields that were filled
+   * @param {((filled: { id: string, fieldIds: Array<string> }) => void) | null}
+   * [onFieldsFilled] Callback to report which fields a fill wrote to
    *
    * @returns {Promise<void>}
    */
-  async initialize(onFormUpdate) {
+  async initialize(
+    onFormUpdate,
+    onFieldOutcomes = null,
+    onFieldsFilled = null
+  ) {
     if (this.#initialized || this.#destroyed) {
       return;
     }
 
     try {
       this.#monitorDocument();
+      this.#monitorFilledFields();
       await this.#detectFields();
 
       if (this.#destroyed) {
@@ -251,6 +293,8 @@ export class SmartFormFillDocument {
       }
 
       this.#onFormUpdate = onFormUpdate;
+      this.#onFieldOutcomes = onFieldOutcomes;
+      this.#onFieldsFilled = onFieldsFilled;
 
       this.#initialized = true;
     } catch (error) {
@@ -275,6 +319,7 @@ export class SmartFormFillDocument {
       return;
     }
 
+    this.#stopMonitoringFilledFields();
     this.#destroyed = true;
 
     this.#formCounter = 0;
@@ -303,6 +348,11 @@ export class SmartFormFillDocument {
     this.#fieldIds = null;
 
     this.#onFormUpdate = null;
+    this.#onFieldOutcomes = null;
+
+    this.#filledFields.clear();
+    this.#filledFields = null;
+
     this.#formUpdateTimeout = null;
     this.#formUpdateAffectedGroupsMap = null;
   }
@@ -368,6 +418,9 @@ export class SmartFormFillDocument {
    * @param {object} param
    * @param {string} param.id The stable Form ID
    * @param {Array<{id: string, value: string}>} param.fields Fill instructions
+   *
+   * Which fields were written is reported through the onFieldsFilled callback
+   * rather than returned: ids only, never the values that were written.
    */
   fillForm({ id, fields }) {
     const group = this.#forms.get(id);
@@ -408,9 +461,134 @@ export class SmartFormFillDocument {
         field.setUserInput(value);
         field.autofillState = lazy.FormAutofillUtils.FIELD_STATES.AUTO_FILLED;
         filledFieldIds.add(fieldId);
+
+        // Tracked after setUserInput, so the input event it dispatches is not
+        // mistaken for the user typing.
+        this.#filledFields.set(fieldId, { formId: id, edited: false });
       }
+
+      this.#onFieldsFilled?.({ id, fieldIds: [...filledFieldIds] });
     } finally {
       Services.obs.notifyObservers(null, "autofill-fill-complete");
+    }
+  }
+
+  /**
+   * Routes the events that tell what became of a filled field.
+   *
+   * @param {Event} event
+   */
+  handleEvent(event) {
+    // Nothing was filled, so no event can end a fill or edit one.
+    if (!this.#filledFields?.size) {
+      return;
+    }
+
+    switch (event.type) {
+      case "input":
+        this.#onFilledFieldInput(event.target);
+        break;
+
+      // The user left one filled field.
+      case "focusout":
+        this.#reportOutcomes(field => field === event.target);
+        break;
+
+      // Every filled field of the submitted form is done.
+      case "submit":
+        this.#reportOutcomes(
+          field => lazy.FormLikeFactory.findRootForField(field) === event.target
+        );
+        break;
+
+      // The page is going away, so nothing else will be reported.
+      case "pagehide":
+        this.#reportOutcomes(() => true);
+        break;
+    }
+  }
+
+  /**
+   * Watches for the user editing a filled field and for the events that end a
+   * fill. Listens in the system group so page scripts cannot hide them by
+   * stopping propagation.
+   *
+   * @private
+   */
+  #monitorFilledFields() {
+    const options = { mozSystemGroup: true };
+
+    this.#doc.addEventListener("input", this, options);
+    this.#doc.addEventListener("focusout", this, options);
+    this.#doc.addEventListener("submit", this, options);
+    this.#doc.defaultView?.addEventListener("pagehide", this, options);
+  }
+
+  /**
+   * @private
+   */
+  #stopMonitoringFilledFields() {
+    const options = { mozSystemGroup: true };
+
+    this.#doc.removeEventListener("input", this, options);
+    this.#doc.removeEventListener("focusout", this, options);
+    this.#doc.removeEventListener("submit", this, options);
+    this.#doc.defaultView?.removeEventListener("pagehide", this, options);
+  }
+
+  /**
+   * Marks a filled field as edited by the user.
+   *
+   * @param {HTMLElement} target
+   *
+   * @private
+   */
+  #onFilledFieldInput(target) {
+    const fieldId = this.#fieldIds.get(target);
+    const filled = fieldId && this.#filledFields.get(fieldId);
+
+    if (filled) {
+      filled.edited = true;
+    }
+  }
+
+  /**
+   * Reports the state of the filled fields the predicate matches, and stops
+   * tracking them, so each field is reported once by whichever event ends its
+   * fill first. Reports what the page saw; naming those states is up to the
+   * parent process.
+   *
+   * @param {(field: HTMLElement) => boolean} matches
+   *
+   * @private
+   */
+  #reportOutcomes(matches) {
+    if (!this.#onFieldOutcomes) {
+      return;
+    }
+
+    const statesByFormId = new Map();
+
+    for (const [fieldId, { formId, edited }] of this.#filledFields) {
+      const field = this.#fieldsById.get(fieldId);
+      if (!field || !matches(field)) {
+        continue;
+      }
+
+      if (!statesByFormId.has(formId)) {
+        statesByFormId.set(formId, []);
+      }
+      statesByFormId.get(formId).push({
+        id: fieldId,
+        edited,
+        isEmpty: field.value.trim() === "",
+      });
+
+      this.#filledFields.delete(fieldId);
+    }
+
+    for (const [formId, fields] of statesByFormId) {
+      this.#onFieldOutcomes({ id: formId, fields });
     }
   }
 

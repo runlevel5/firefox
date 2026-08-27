@@ -6,6 +6,7 @@ license = "MPL-2.0"
 
 [dependencies]
 log = "0.4"
+mozbuild = "0.1"
 nserror = { path = "../../../../xpcom/rust/nserror" }
 nsstring = { path = "../../../../xpcom/rust/nsstring" }
 xpcom = { path = "../../../../xpcom/rust/xpcom" }

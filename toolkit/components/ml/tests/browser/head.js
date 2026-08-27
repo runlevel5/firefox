@@ -13,7 +13,7 @@ Services.scriptloader.loadSubScript(
  * @type {import("../../actors/MLEngineParent.sys.mjs")}
  */
 const { MLEngineParent, MLEngine } = ChromeUtils.importESModule(
-  "resource://gre/actors/MLEngineParent.sys.mjs"
+  "moz-src:///toolkit/components/ml/actors/MLEngineParent.sys.mjs"
 );
 
 const { ModelHub, TestIndexedDBCache } = ChromeUtils.importESModule(

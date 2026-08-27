@@ -16,9 +16,6 @@ support-files = [
 
 ["browser_ext_contextMenus.js"]
 support-files = ["!/browser/components/places/tests/browser/head.js"]
-skip-if = [
-  "os == 'linux' && os_version == '24.04' && arch == 'x86_64' && display == 'x11'", # Bug 1971622
-]
 
 ["browser_ext_contextMenus_bookmarks.js"]
 support-files = ["!/browser/components/places/tests/browser/head.js"]

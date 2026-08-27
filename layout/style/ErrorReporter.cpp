@@ -15,8 +15,8 @@
 #include "mozilla/css/Loader.h"
 #include "mozilla/dom/Document.h"
 #include "nsComponentManagerUtils.h"
+#include "nsDocShell.h"
 #include "nsIConsoleService.h"
-#include "nsIDocShell.h"
 #include "nsIFactory.h"
 #include "nsINode.h"
 #include "nsIScriptError.h"
@@ -149,14 +149,8 @@ ErrorReporter::~ErrorReporter() {
 
 bool ErrorReporter::ShouldReportErrors(const Document& aDoc) {
   MOZ_ASSERT(NS_IsMainThread());
-  nsIDocShell* shell = aDoc.GetDocShell();
-  if (!shell) {
-    return false;
-  }
-
-  bool report = false;
-  shell->GetCssErrorReportingEnabled(&report);
-  return report;
+  nsDocShell* shell = nsDocShell::Cast(aDoc.GetDocShell());
+  return shell && shell->CSSErrorReportingEnabled();
 }
 
 static nsINode* SheetOwner(const StyleSheet& aSheet) {

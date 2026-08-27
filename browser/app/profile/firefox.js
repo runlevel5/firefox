@@ -457,8 +457,13 @@ pref("browser.urlbar.focusContentDocumentOnEsc", true);
 pref("browser.urlbar.ipc.chromeMessagePassing", false);
 
 // Feature gate for the <moz-urlbar> on about:newtab and about:home. When
-// enabled, it supersedes New Tab's handoff search bar.
+// enabled, it supersedes New Tab's handoff search bar. Disabled in debug
+// because of bug 2065180.
+#if defined(NIGHTLY_BUILD) && !defined(DEBUG)
+pref("browser.urlbar.newtab.featureGate", true);
+#else
 pref("browser.urlbar.newtab.featureGate", false);
+#endif
 
 // Enable a certain level of urlbar logging to the Browser Console. See
 // ConsoleInstance.webidl.
@@ -2361,6 +2366,7 @@ pref("browser.ml.linkPreview.outputSentences", 3);
 pref("browser.ml.linkPreview.recentTypingMs", 1000);
 pref("browser.ml.linkPreview.shift", false);
 pref("browser.ml.linkPreview.shiftAlt", false);
+pref("browser.ml.linkPreview.smokeTest.lastBuildID", "");
 pref("browser.ml.linkPreview.supportedLocales", "en");
 
 pref("browser.ml.pageAssist.enabled", false);

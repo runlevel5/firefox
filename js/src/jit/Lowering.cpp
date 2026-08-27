@@ -7423,18 +7423,11 @@ void LIRGenerator::visitWasmCall(MWasmCallT ins) {
   add(lir, ins);
   assignWasmSafepoint(lir);
 
-  // WasmCall with WasmTable has two call instructions, and they both need a
-  // safepoint associated with them.  Create a second safepoint here; the node
-  // otherwise does nothing, and codegen for it only marks the safepoint at the
-  // node.
-  if ((ins->callee().which() == wasm::CalleeDesc::WasmTable ||
-       ins->callee().which() == wasm::CalleeDesc::FuncRef) &&
-      !ins->isWasmReturnCall()) {
-    auto* adjunctSafepoint = new (alloc()) LWasmCallIndirectAdjunctSafepoint();
-    add(adjunctSafepoint);
-    assignWasmSafepoint(adjunctSafepoint);
-    lir->setAdjunctSafepoint(adjunctSafepoint);
-  }
+  // WasmCall with WasmTable or FuncRef has two call instructions (fast and slow
+  // path), and both need a stackmap. The two paths rejoin with the same live
+  // references and frame layout, so codegen registers this call's single
+  // LSafepoint a second time at the slow-path return offset; see
+  // CodeGenerator::visitWasmCall.
 }
 
 void LIRGenerator::visitWasmCallCatchable(MWasmCallCatchable* ins) {

@@ -12,6 +12,7 @@ import androidx.core.content.ContextCompat
 import java.util.Locale
 import mozilla.components.browser.state.selector.selectedTab
 import mozilla.components.browser.state.store.BrowserStore
+import mozilla.components.concept.base.crash.CrashReporting
 import mozilla.components.feature.privatemode.notification.AbstractPrivateNotificationService
 import mozilla.components.support.base.android.NotificationsDelegate
 import mozilla.components.ui.icons.R as iconsR
@@ -31,6 +32,8 @@ import org.mozilla.fenix.ext.components
  * As long as a session is active this service will keep its notification alive.
  */
 class PrivateNotificationService : AbstractPrivateNotificationService() {
+
+    override val crashReporter: CrashReporting by lazy { components.analytics.crashReporter }
 
     override val store: BrowserStore by lazy { components.core.store }
 

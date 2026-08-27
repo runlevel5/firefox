@@ -172,6 +172,8 @@ skip-if = [
   "os == 'linux' && os_version == '24.04' && arch == 'x86_64' && display == 'x11' && opt && a11y_checks && swgl", # Bug 1964764
 ]
 
+["browser_permission_prompt_focus.js"]
+
 ["browser_permission_prompt_userScripts.js"]
 
 ["browser_reinstall.js"]

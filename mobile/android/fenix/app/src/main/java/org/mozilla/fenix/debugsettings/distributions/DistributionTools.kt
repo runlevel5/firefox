@@ -59,11 +59,20 @@ fun DistributionTools() {
         )
     }
 
+    val referral: String = remember {
+        buildList {
+            add("referralCode: ${settings.referralCode.ifEmpty { "(none)" }}")
+            add("referralPingSubmitted: \${settings.referralPingSubmitted}")
+        }
+            .joinToString()
+    }
+
     val coroutineScope = rememberCoroutineScope()
 
     DistributionToolsContent(
         distributionId = distributionId,
         playInstallReferrer = playInstallReferrer,
+        referral = referral,
         onQueryProvider = {
             coroutineScope.launch {
                 DefaultDistributionProviderChecker(context).queryProvider()
@@ -76,6 +85,7 @@ fun DistributionTools() {
 private fun DistributionToolsContent(
     distributionId: String,
     playInstallReferrer: String,
+    referral: String,
     onQueryProvider: () -> Unit,
 ) {
     Surface {
@@ -106,6 +116,17 @@ private fun DistributionToolsContent(
                 modifier = Modifier.padding(FirefoxTheme.layout.space.static50),
             )
 
+            Text(
+                text = stringResource(R.string.debug_drawer_referral),
+                style = FirefoxTheme.typography.headline6,
+                modifier = Modifier.padding(FirefoxTheme.layout.space.static50),
+            )
+
+            Text(
+                text = referral,
+                modifier = Modifier.padding(FirefoxTheme.layout.space.static50),
+            )
+
             FilledButton(
                 text = stringResource(R.string.debug_drawer_run_query_provider_test),
                 onClick = onQueryProvider,
@@ -121,6 +142,7 @@ private fun DistributionToolsPreview(@PreviewParameter(PreviewThemeProvider::cla
         DistributionToolsContent(
             distributionId = "distributionId",
             playInstallReferrer = "test",
+            referral = "referralCode: 0123456789ABCXYZ",
             onQueryProvider = {},
         )
     }

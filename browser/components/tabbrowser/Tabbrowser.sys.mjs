@@ -7343,6 +7343,10 @@ export class Tabbrowser {
     const notifyAll = Ci.nsIWebProgress.NOTIFY_ALL;
     filter.addProgressListener(tabListener, notifyAll);
     ourBrowser.webProgress.addProgressListener(filter, notifyAll);
+
+    // The swap gave this tab a different browsing context, and therefore a
+    // different media controller to listen to.
+    aOurTab.registerAudibleChangeHandler();
   }
 
   #swapRegisteredOpenURIs(aOurBrowser, aOtherBrowser) {
@@ -8874,7 +8878,9 @@ export class Tabbrowser {
       tabCount: tabs.length,
     });
     for (let tab of tabs) {
-      this.pinTab(tab, this.TabMetrics.decomposedContext(metricsContext));
+      this.pinTab(tab, {
+        metricsContext: this.TabMetrics.decomposedContext(metricsContext),
+      });
     }
   }
 

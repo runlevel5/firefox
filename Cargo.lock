@@ -492,6 +492,7 @@ name = "backgroundtaskregistrar"
 version = "0.1.0"
 dependencies = [
  "log",
+ "mozbuild",
  "mozilla-central-workspace-hack",
  "nserror",
  "nsstring",
@@ -5374,10 +5375,12 @@ dependencies = [
 name = "msixcomserver_s"
 version = "0.1.0"
 dependencies = [
+ "futures-executor",
  "mozbuild",
  "mozilla-central-workspace-hack",
  "windows",
  "windows-core",
+ "windows-future",
 ]
 
 [[package]]

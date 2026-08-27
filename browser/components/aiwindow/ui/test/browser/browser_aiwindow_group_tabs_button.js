@@ -826,6 +826,122 @@ describe("Auto Tab Grouping toolbar button", () => {
       Assert.equal(closed[0].extra.duplicate_tabs, "2", "Closed both");
       Assert.equal(closed[0].extra.success, "true", "Closing succeeded");
     });
+
+    // Open the panel on a window holding duplicates, and preview them.
+    async function openDuplicatesFlyout() {
+      win = await openGroupingWindowWithTabs();
+      // Three copies of /a and two of /b, so three tabs would close.
+      await addWebTabs(win, ["a", "b"]);
+      await addWebTabs(win, ["a"]);
+
+      const panel = await openPanelWithSuggestions(win);
+      const row = await TestUtils.waitForCondition(
+        () => panel.querySelector(".swgt-close-duplicates"),
+        "The 'Close Duplicate Tabs' row appears once duplicates exist"
+      );
+      row.dispatchEvent(new win.MouseEvent("mouseenter"));
+      await TestUtils.waitForCondition(
+        () => panel._flyoutPanel?.state === "open",
+        "Pointing at the row opens its preview"
+      );
+      await panel._flyoutPanel._flyoutEl.updateComplete;
+      return {
+        panel,
+        row,
+        tabRows: [...panel._flyoutPanel.querySelectorAll(".swgt-flyout-tab")],
+      };
+    }
+
+    it("previews the tabs it would close and switches to the one clicked", async () => {
+      const { panel, row, tabRows } = await openDuplicatesFlyout();
+
+      Assert.equal(
+        win.gBrowser.getAllDuplicateTabsToClose().length,
+        3,
+        "Three tabs would close: two extra copies of /a and one of /b"
+      );
+      Assert.equal(
+        tabRows.length,
+        3,
+        "One row per tab, listing each copy that would close"
+      );
+      Assert.equal(
+        row.getAttribute("aria-expanded"),
+        "true",
+        "The row reports the list it opened"
+      );
+      Assert.ok(
+        row.classList.contains("is-active"),
+        "The row stays highlighted while its preview is up"
+      );
+
+      const tabsBefore = win.gBrowser.tabs.length;
+      const previewed = panel._duplicateTabs[1];
+      tabRows[1].click();
+      await TestUtils.waitForCondition(
+        () => !win.document.getElementById("smartwindow-group-tabs-panel"),
+        "Selecting a tab closes the panel"
+      );
+      Assert.equal(
+        win.gBrowser.selectedTab,
+        previewed,
+        "The clicked duplicate is selected"
+      );
+      Assert.equal(
+        win.gBrowser.tabs.length,
+        tabsBefore,
+        "Looking at a duplicate does not close anything"
+      );
+    });
+
+    it("keeps the preview through the keyboard and the pointer", async () => {
+      const { panel, row, tabRows } = await openDuplicatesFlyout();
+
+      row.focus();
+      EventUtils.synthesizeKey("KEY_ArrowRight", {}, win);
+      await TestUtils.waitForCondition(
+        () => win.document.activeElement === tabRows[0],
+        "The forward arrow moves focus into the preview"
+      );
+      EventUtils.synthesizeKey("KEY_ArrowLeft", {}, win);
+      await TestUtils.waitForCondition(
+        () =>
+          win.document.activeElement === row &&
+          panel._flyoutPanel.state === "closed",
+        "The back arrow closes it again and returns focus to the row"
+      );
+
+      // Sliding over from a suggestion swaps what the flyout lists rather than
+      // closing it on the way.
+      const suggestion = panel.querySelector(".swgt-suggestion");
+      suggestion.dispatchEvent(new win.MouseEvent("mouseenter"));
+      await TestUtils.waitForCondition(
+        () =>
+          panel._flyoutPanel._flyoutEl.suggestion &&
+          panel._flyoutPanel.state !== "closed",
+        "The suggestion took the flyout over"
+      );
+      row.dispatchEvent(new win.MouseEvent("mouseover", { bubbles: true }));
+      row.dispatchEvent(new win.MouseEvent("mouseenter"));
+      Assert.notEqual(
+        panel._flyoutPanel.state,
+        "closed",
+        "The flyout never closed on the way back"
+      );
+      Assert.equal(
+        panel._flyoutPanel._flyoutEl.duplicates.length,
+        3,
+        "It lists the duplicates again"
+      );
+
+      panel
+        .querySelector(".swgt-create-all")
+        .dispatchEvent(new win.MouseEvent("mouseover", { bubbles: true }));
+      await TestUtils.waitForCondition(
+        () => panel._flyoutPanel.state === "closed",
+        "Moving onto a row with no preview of its own closes it"
+      );
+    });
   });
 
   describe("viewing existing tab groups", () => {

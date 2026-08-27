@@ -9,13 +9,15 @@
 const TEST_URL = "https://example.com/";
 
 async function pickHeuristic(browser, modifiers) {
-  await searchInNewTabPage(browser, TEST_URL);
-  await waitForResults(browser);
+  await NewtabSearchbarTestUtils.promiseAutocompleteResultPopup({
+    browser,
+    value: TEST_URL,
+  });
   await BrowserTestUtils.synthesizeKey("KEY_Enter", modifiers, browser);
 }
 
 add_task(async function sameTab() {
-  let tab = await openNewTabPage();
+  let tab = await NewtabSearchbarTestUtils.openNewTabPage();
   let loaded = BrowserTestUtils.browserLoaded(
     tab.linkedBrowser,
     false,
@@ -35,7 +37,7 @@ add_task(async function sameTab() {
 });
 
 add_task(async function modifierOpensNewTab() {
-  let tab = await openNewTabPage();
+  let tab = await NewtabSearchbarTestUtils.openNewTabPage();
   let opened = BrowserTestUtils.waitForNewTab(gBrowser, TEST_URL, true);
   await pickHeuristic(tab.linkedBrowser, { altKey: true });
   let newTab = await opened;
@@ -45,6 +47,8 @@ add_task(async function modifierOpensNewTab() {
     "about:newtab",
     "the newtab tab stayed where it was"
   );
+  let { value } = await NewtabSearchbarTestUtils.getState(tab.linkedBrowser);
+  Assert.equal(value, TEST_URL, "the bar kept what was typed");
 
   BrowserTestUtils.removeTab(newTab);
   BrowserTestUtils.removeTab(tab);

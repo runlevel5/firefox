@@ -2372,14 +2372,6 @@
     "n_values": 4,
     "description": "Accumulates type of content per page load (0=no mixed or non-secure page, 1=mixed passive, 2=mixed active, 3=mixed passive and mixed active)"
   },
-  "MIXED_CONTENT_UNBLOCK_COUNTER": {
-    "record_in_processes": ["main", "content"],
-    "products": ["firefox", "fennec"],
-    "expires_in_version": "never",
-    "kind": "enumerated",
-    "n_values": 3,
-    "description": "A simple counter of daily mixed-content unblock operations and top documents loaded"
-  },
   "MIXED_CONTENT_HSTS": {
     "record_in_processes": ["main", "content"],
     "products": ["firefox", "fennec"],
@@ -2512,17 +2504,6 @@
     "description": "True if tracking protection in Private Browsing mode is disabled at startup.",
     "alert_emails": ["pdol@mozilla.com", "safebrowsing-telemetry@mozilla.org"],
     "bug_numbers": [1200944]
-  },
-  "FINGERPRINTERS_BLOCKED_COUNT": {
-    "record_in_processes": ["main"],
-    "products": ["firefox", "fennec"],
-    "expires_in_version": "never",
-    "releaseChannelCollection": "opt-out",
-    "kind": "categorical",
-    "labels": ["pageLoad", "blocked", "allowed"],
-    "description": "A count of the status of fingerprinter blocking per top level page load. ('pageLoad' = There was a page load, 'blocked' = at least one fingerprinter was blocked, 'allowed' = at least one fingerprinter was detected and allowed.) Note, pageLoad is used as a baseline measurement.",
-    "alert_emails": ["aedelstein@mozilla.com", "seceng-telemetry@mozilla.com"],
-    "bug_numbers": [1522919]
   },
   "TRACKING_PROTECTION_SHIELD": {
     "record_in_processes": ["main", "content"],
@@ -3090,18 +3071,6 @@
     "high": 30000,
     "n_buckets": 20,
     "description": "Sanitize: Time it takes to sanitize the open windows list (ms). On Android, this is the time it takes to close all open tabs (ms)."
-  },
-  "PWMGR_LOGIN_PAGE_SAFETY": {
-    "record_in_processes": ["content"],
-    "products": ["firefox", "fennec"],
-    "alert_emails": ["seceng-telemetry@mozilla.com", "loines@mozilla.com"],
-    "bug_numbers": [1340021, 1545172],
-    "releaseChannelCollection": "opt-out",
-    "expires_in_version": "never",
-    "kind": "enumerated",
-    "n_values": 8,
-    "description": "The safety of a page where we see a password field. (0: safe page & safe submit; 1: safe page & unsafe submit; 2: safe page & unknown submit; 3: unsafe page & safe submit; 4: unsafe page & unsafe submit; 5: unsafe page & unknown submit)",
-    "record_into_store": ["main"]
   },
   "PWMGR_NUM_IMPROVED_GENERATED_PASSWORDS": {
     "record_in_processes": ["main"],

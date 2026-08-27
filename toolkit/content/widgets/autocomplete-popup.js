@@ -10,7 +10,7 @@
   const lazy = {};
 
   ChromeUtils.defineESModuleGetters(lazy, {
-    AutoCompleteParent: "resource://gre/actors/AutoCompleteParent.sys.mjs",
+    AutoCompleteParent: "moz-src:///toolkit/actors/AutoCompleteParent.sys.mjs",
   });
 
   if (!customElements.get("autocomplete-row-item")) {

@@ -912,20 +912,25 @@ export class AgentMonitorItem extends MozLitElement {
     return html`
       <div class="monitor-card chatcard" @click=${this.#onCardClick}>
         <div class="monitor-card-head">
-          ${this.#renderStatusChip()}
-          <span class="monitor-card-title"
-            ><span class="monitor-card-name">${agent.monitorName}</span></span
-          >
-          <span class="spacer"></span>
-          ${this.showLastResult ? this.#renderLastCheckedCondition() : nothing}
-          <button
-            type="button"
-            class="chev"
-            aria-expanded=${this.expanded}
-            data-l10n-id="ai-tasks-alert-show-details"
-            data-l10n-attrs="aria-label"
-            @click=${this.#onToggle}
-          ></button>
+          <div class="monitor-card-head-left">
+            ${this.#renderStatusChip()}
+            <span class="monitor-card-title"
+              ><span class="monitor-card-name">${agent.monitorName}</span></span
+            >
+          </div>
+          <div class="monitor-card-head-right">
+            ${this.showLastResult
+              ? this.#renderLastCheckedCondition()
+              : nothing}
+            <button
+              type="button"
+              class="chev"
+              aria-expanded=${this.expanded}
+              data-l10n-id="ai-tasks-alert-show-details"
+              data-l10n-attrs="aria-label"
+              @click=${this.#onToggle}
+            ></button>
+          </div>
         </div>
         ${this.expanded ? this.#renderExpand() : nothing}
       </div>

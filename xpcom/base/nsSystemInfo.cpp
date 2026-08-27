@@ -1774,6 +1774,7 @@ nsresult nsSystemInfo::Init() {
   nsCString dist, desc, release, codename;
   if (widget::lsb::GetLSBRelease(dist, desc, release, codename)) {
     SetPropertyAsACString(u"distro"_ns, dist);
+    SetPropertyAsACString(u"distroDesc"_ns, desc);
     SetPropertyAsACString(u"distroVersion"_ns, release);
   }
 

@@ -597,7 +597,6 @@ class FullScreenFeatureTest {
             store.dispatch(ContentAction.FullScreenChangedAction("A", false))
             testDispatcher.scheduler.advanceUntilIdle()
 
-            // Consumers reset the window's cutout mode on exit, so the tab's value must be re-applied.
             assertEquals(
                 listOf(
                     WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES,
@@ -605,6 +604,41 @@ class FullScreenFeatureTest {
                 ),
                 viewPorts,
             )
+        }
+
+    @Test
+    fun `GIVEN no viewport-fit was applied WHEN leaving fullscreen THEN the default is not applied over the restore`() =
+        runTest(testDispatcher) {
+            val viewPorts = mutableListOf<Int>()
+
+            val store =
+                BrowserStore(
+                    BrowserState(
+                        tabs = listOf(createTab("https://www.mozilla.org", id = "A")),
+                        selectedTabId = "A",
+                    )
+                )
+
+            val feature =
+                FullScreenFeature(
+                    store = store,
+                    sessionUseCases = mock(),
+                    tabId = null,
+                    mainDispatcher = testDispatcher,
+                    viewportFitChanged = { value -> viewPorts.add(value) },
+                    fullScreenChanged = {},
+                )
+
+            feature.start()
+            testDispatcher.scheduler.advanceUntilIdle()
+
+            store.dispatch(ContentAction.FullScreenChangedAction("A", true))
+            testDispatcher.scheduler.advanceUntilIdle()
+
+            store.dispatch(ContentAction.FullScreenChangedAction("A", false))
+            testDispatcher.scheduler.advanceUntilIdle()
+
+            assertEquals(emptyList<Int>(), viewPorts)
         }
 
     @Test

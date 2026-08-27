@@ -17,6 +17,8 @@ ChromeUtils.defineESModuleGetters(lazy, {
     "moz-src:///browser/components/aiwindow/ui/modules/SmartFormFillController.sys.mjs",
   SmartFormFillAutocomplete:
     "moz-src:///browser/components/aiwindow/ui/modules/SmartFormFillAutocomplete.sys.mjs",
+  SmartFormFillTelemetry:
+    "moz-src:///browser/components/aiwindow/ui/modules/SmartFormFillTelemetry.sys.mjs",
 });
 
 ChromeUtils.defineLazyGetter(lazy, "console", function () {
@@ -36,6 +38,52 @@ XPCOMUtils.defineLazyPreferenceGetter(
 /** @typedef {import("moz-src:///browser/components/aiwindow/models/SmartFormFillModel.sys.mjs").PageInfo} PageInfo */
 /** @typedef {import("moz-src:///browser/components/aiwindow/models/SmartFormFillModel.sys.mjs").RelevantTab} RelevantTab */
 /** @typedef {import("moz-src:///browser/components/aiwindow/ui/modules/SmartFormFillAutocomplete.sys.mjs").SmartFormFillAutocompleteSource} SmartFormFillAutocompleteSource */
+
+/** @typedef {import("moz-src:///browser/components/aiwindow/models/SmartFormFillModel.sys.mjs").ClassificationResponse} ClassificationResponse */
+/** @typedef {import("moz-src:///browser/components/aiwindow/models/SmartFormFillModel.sys.mjs").ClassifyFieldsRequestBody} ClassifyFieldsRequestBody */
+/** @typedef {import("moz-src:///browser/components/aiwindow/models/SmartFormFillModel.sys.mjs").GenerateFormValuesRequestBody} GenerateFormValuesRequestBody */
+/** @typedef {import("moz-src:///browser/components/aiwindow/models/SmartFormFillModel.sys.mjs").GenerateFormValuesResponse} GenerateFormValuesResponse */
+/** @typedef {import("moz-src:///browser/components/aiwindow/models/SmartFormFillModel.sys.mjs").RelevantTabRequestBody} RelevantTabRequestBody */
+/** @typedef {import("moz-src:///browser/components/aiwindow/models/SmartFormFillModel.sys.mjs").RelevantTabsResponse} RelevantTabsResponse */
+/** @typedef {import("moz-src:///browser/components/aiwindow/models/SmartFormFillModel.sys.mjs").FieldData} FieldData */
+/** @typedef {import("moz-src:///browser/components/aiwindow/models/SmartFormFillModel.sys.mjs").FieldClassification} FieldClassification */
+/** @typedef {import("moz-src:///browser/components/aiwindow/ui/modules/SmartFormFillTelemetry.sys.mjs").FieldDecision} FieldDecision */
+/** @typedef {import("moz-src:///browser/components/aiwindow/ui/modules/SmartFormFillTelemetry.sys.mjs").ModelInfo} ModelInfo */
+/** @typedef {import("moz-src:///browser/components/aiwindow/ui/modules/SmartFormFillTelemetry.sys.mjs").RequestFlow} RequestFlow */
+
+/**
+ * What a generation round produced, beyond the values the page is asked to
+ * fill.
+ *
+ * @typedef {{
+ *   formId: string,
+ *   fieldsFilled: number,
+ *   response: GenerateFormValuesResponse,
+ *   fields: Array<FieldData>,
+ *   formFields: Array<FieldData>,
+ *   classifications: Map<string, FieldClassification>,
+ *   tokensByFieldId: Map<string, string>,
+ * }} GenerationResult
+ */
+
+/**
+ * How the controller reports the requests it makes. A dispatch callback answers
+ * with the flow the request belongs to, which is handed back on the matching
+ * answer or failure so the two can be paired. The controller treats it as
+ * opaque, so resolving flow ids stays here.
+ *
+ * @typedef {{
+ *   onRelevantTabsDispatched: (formId: string, request: RelevantTabRequestBody, modelInfo: ModelInfo) => RequestFlow,
+ *   onRelevantTabsAnswered: (flow: RequestFlow, response: RelevantTabsResponse, tabsUsed: number) => void,
+ *   onRelevantTabsFailed: (flow: RequestFlow, error: Error) => void,
+ *   onClassifyDispatched: (formId: string, request: ClassifyFieldsRequestBody, modelInfo: ModelInfo) => RequestFlow,
+ *   onClassifyAnswered: (flow: RequestFlow, response: ClassificationResponse) => void,
+ *   onClassifyFailed: (flow: RequestFlow, error: Error) => void,
+ *   onGenerateDispatched: (formId: string, request: GenerateFormValuesRequestBody, dispatch: object) => RequestFlow,
+ *   onGenerateAnswered: (flow: RequestFlow, result: GenerationResult) => void,
+ *   onGenerateFailed: (flow: RequestFlow, error: Error) => void,
+ * }} RequestObserver
+ */
 
 /**
  * @typedef {"idle" | "loading" | "ready" | "failed"} MetadataStatus
@@ -115,6 +163,32 @@ export class SmartFormFillParent extends JSWindowActorParent {
   #destroyed;
 
   /**
+   * Sends the Smart Form Fill glean events for the managed document.
+   *
+   * @type {SmartFormFillTelemetry}
+   */
+  #telemetry;
+
+  /**
+   * Flow id correlating every event of a form's current round. Minted with the
+   * form's metadata and replaced whenever that metadata is invalidated, so one
+   * flow is one attempt at filling one form.
+   *
+   * @type {Map<string, string>}
+   */
+  #flowIdByFormId;
+
+  /**
+   * The model's decision for each field of the latest generation round, by form
+   * ID. Kept after the round ends because the field events are only complete
+   * once the page reports what it filled, and the outcome of each field is only
+   * known when the fill is torn down.
+   *
+   * @type {Map<string, { flowId: string, decisions: Array<FieldDecision> }>}
+   */
+  #fieldDecisionsByFormId;
+
+  /**
    * Creates the parent actor.
    */
   constructor() {
@@ -126,6 +200,9 @@ export class SmartFormFillParent extends JSWindowActorParent {
     this.#smartWindowIds = new Set();
     this.#autofillGeneration = 0;
     this.#formMetadataById = new Map();
+    this.#telemetry = new lazy.SmartFormFillTelemetry();
+    this.#flowIdByFormId = new Map();
+    this.#fieldDecisionsByFormId = new Map();
   }
 
   /**
@@ -228,6 +305,12 @@ export class SmartFormFillParent extends JSWindowActorParent {
 
       case "SmartFormFill:FormUpdate":
         return this.#onFormUpdate(data);
+
+      case "SmartFormFill:FieldsFilled":
+        return this.#onFieldsFilled(data.id, data.fieldIds);
+
+      case "SmartFormFill:FieldOutcomes":
+        return this.#onFieldOutcomes(data.id, data.fields);
     }
 
     return null;
@@ -241,6 +324,8 @@ export class SmartFormFillParent extends JSWindowActorParent {
     this.#smartWindowIds.clear();
     this.#destroyed = true;
     this.#formMetadataById.clear();
+    this.#flowIdByFormId.clear();
+    this.#fieldDecisionsByFormId.clear();
     this.#controller?.destroy();
     this.#controller = null;
   }
@@ -252,7 +337,10 @@ export class SmartFormFillParent extends JSWindowActorParent {
    */
   #getController() {
     if (!this.#controller) {
-      this.#controller = new lazy.SmartFormFillController(this.#getPageInfo());
+      this.#controller = new lazy.SmartFormFillController(
+        this.#getPageInfo(),
+        this.#getRequestObserver()
+      );
     }
 
     return this.#controller;
@@ -297,6 +385,7 @@ export class SmartFormFillParent extends JSWindowActorParent {
         classificationRevision: 0,
       };
       this.#formMetadataById.set(focusedForm.id, metadata);
+      this.#flowIdByFormId.set(focusedForm.id, crypto.randomUUID());
     } else if (this.#hasFormStructureChanged(metadata.formData, formData)) {
       this.#invalidateFormMetadata(metadata, formData);
     }
@@ -337,6 +426,11 @@ export class SmartFormFillParent extends JSWindowActorParent {
     metadata.relevantTabsPromise = null;
     metadata.classificationPromise = null;
     this.#controller?.invalidateForm(formData.id);
+
+    // The round this form was on is superseded, so its events stop sharing a
+    // flow with the ones the next round will record.
+    this.#flowIdByFormId.set(formData.id, crypto.randomUUID());
+    this.#fieldDecisionsByFormId.delete(formData.id);
   }
 
   /**
@@ -657,6 +751,8 @@ export class SmartFormFillParent extends JSWindowActorParent {
         ++metadata.classificationRevision;
         this.#controller?.invalidateForm(formId);
         this.#formMetadataById.delete(formId);
+        this.#flowIdByFormId.delete(formId);
+        this.#fieldDecisionsByFormId.delete(formId);
         continue;
       }
 
@@ -800,5 +896,135 @@ export class SmartFormFillParent extends JSWindowActorParent {
    */
   get hasSourceTabs() {
     return Boolean(this.#controller?.hasSourceTabs);
+  }
+
+  /**
+   * Gets the flow id correlating the events of a form's current round. Empty
+   * when the form is gone, which a request in flight can outlive.
+   *
+   * @param {string} formId
+   *
+   * @returns {string}
+   */
+  #getFlowId(formId) {
+    return this.#flowIdByFormId.get(formId) ?? "";
+  }
+
+  /**
+   * Records what the model decided for each field of a form, now that the page
+   * has reported which of them it filled.
+   *
+   * @param {string} formId
+   * @param {Array<string>} filledFieldIds
+   */
+  #onFieldsFilled(formId, filledFieldIds) {
+    const round = this.#fieldDecisionsByFormId.get(formId);
+    if (!round) {
+      return;
+    }
+
+    this.#telemetry.sendFillFieldTelemetry(
+      round.flowId,
+      round.decisions,
+      filledFieldIds
+    );
+  }
+
+  /**
+   * Records what became of the fields a round filled, now that the page has
+   * reported the state each one ended in.
+   *
+   * @param {string} formId
+   * @param {Array<{ id: string, edited: boolean, isEmpty: boolean }>} fields
+   */
+  #onFieldOutcomes(formId, fields) {
+    const round = this.#fieldDecisionsByFormId.get(formId);
+    if (!round) {
+      return;
+    }
+
+    this.#telemetry.sendFillFieldOutcomeTelemetry(
+      round.flowId,
+      round.decisions,
+      fields
+    );
+  }
+
+  /**
+   * Builds the callbacks the controller reports its requests through.
+   *
+   * @returns {RequestObserver}
+   */
+  #getRequestObserver() {
+    return {
+      onRelevantTabsDispatched: (formId, request, modelInfo) =>
+        this.#telemetry.startRelevantTabsRequest(
+          this.#getFlowId(formId),
+          request,
+          modelInfo
+        ),
+
+      onRelevantTabsAnswered: (flow, response, tabsUsed) =>
+        this.#telemetry.sendRelevantTabsResponseTelemetry(
+          flow,
+          response,
+          tabsUsed
+        ),
+
+      onRelevantTabsFailed: (flow, error) =>
+        this.#telemetry.sendRelevantTabsErrorTelemetry(flow, error),
+
+      onClassifyDispatched: (formId, request, modelInfo) =>
+        this.#telemetry.startClassifyRequest(
+          this.#getFlowId(formId),
+          request,
+          modelInfo
+        ),
+
+      onClassifyAnswered: (flow, response) =>
+        this.#telemetry.sendClassifyResponseTelemetry(flow, response),
+
+      onClassifyFailed: (flow, error) =>
+        this.#telemetry.sendClassifyErrorTelemetry(flow, error),
+
+      onGenerateDispatched: (formId, request, dispatch) =>
+        this.#telemetry.startGenerateRequest(
+          this.#getFlowId(formId),
+          request,
+          dispatch
+        ),
+
+      onGenerateAnswered: (flow, result) => {
+        const {
+          formId,
+          fieldsFilled,
+          response,
+          fields,
+          formFields,
+          classifications,
+          tokensByFieldId,
+        } = result;
+
+        this.#telemetry.sendGenerateResponseTelemetry(
+          flow,
+          fieldsFilled,
+          response
+        );
+
+        this.#fieldDecisionsByFormId.set(formId, {
+          flowId: flow.flowId,
+          decisions: this.#telemetry.resolveFieldDecisions({
+            fields,
+            formFields,
+            classifications,
+            tokensByFieldId,
+            values: response,
+          }),
+        });
+      },
+
+      onGenerateFailed: (flow, error) =>
+        this.#telemetry.sendGenerateErrorTelemetry(flow, error),
+    };
   }
 }

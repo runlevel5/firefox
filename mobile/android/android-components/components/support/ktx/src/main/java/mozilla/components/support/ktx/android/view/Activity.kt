@@ -16,6 +16,7 @@ import androidx.core.view.ViewCompat.onApplyWindowInsets
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import mozilla.components.support.base.log.logger.Logger
+import mozilla.components.support.ktx.R
 import mozilla.components.support.ktx.android.content.isEdgeToEdgeDisabled
 
 private const val IMMERSIVE_MODE_WINDOW_INSETS_LISTENER = "IMMERSIVE_MODE_WINDOW_INSETS_LISTENER"
@@ -62,7 +63,7 @@ private fun WindowInsetsControllerCompat.hideInsets() {
 /**
  * Shows the system UI windows that were hidden, thereby exiting the immersive experience. For devices running API 28+
  * on which edge-to-edge is not enforced, this function also restores the application's use of the notch area of the
- * phone to the default behavior.
+ * phone to how it was before [enterImmersiveMode] was called.
  *
  * @param insetsController is an optional [WindowInsetsControllerCompat] object for controlling the window insets.
  * @param removeListenerFunction is an optional function which was used for [enterImmersiveMode].
@@ -100,7 +101,8 @@ fun Activity.reportFullyDrawnSafe(errorLogger: Logger) {
 }
 
 /**
- * For devices running Android 9 Pie, force the given activity to enter edge-to-edge mode.
+ * For devices running Android 9 Pie, force the given activity to enter edge-to-edge mode. The display cutout mode in
+ * effect beforehand is remembered so that [tryDisableEdgeToEdge] can restore it.
  *
  * The display cutout mode is only changed when edge-to-edge is not enforced, see [setLegacyDisplayCutoutMode].
  */
@@ -110,28 +112,46 @@ fun Activity.tryEnableEnterEdgeToEdge() {
             WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
             WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
         )
+        rememberDisplayCutoutMode()
         setLegacyDisplayCutoutMode(WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES)
     }
 }
 
 /**
- * For devices running Android 9 Pie, force the given activity to exit edge-to-edge mode.
+ * For devices running Android 9 Pie, force the given activity to exit edge-to-edge mode, restoring the display cutout
+ * mode that [tryEnableEnterEdgeToEdge] remembered. The cutout mode is left alone when there is nothing to restore.
  *
  * The display cutout mode is only changed when edge-to-edge is not enforced, see [setLegacyDisplayCutoutMode].
  */
 fun Activity.tryDisableEdgeToEdge() {
     if (SDK_INT >= VERSION_CODES.P) {
         window.clearFlags(WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS)
-        setLegacyDisplayCutoutMode(WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_DEFAULT)
+        takeRememberedDisplayCutoutMode()?.let { setLegacyDisplayCutoutMode(it) }
     }
 }
+
+/** Stores this window's [WindowManager.LayoutParams.layoutInDisplayCutoutMode], which cannot be assumed. */
+@RequiresApi(VERSION_CODES.P)
+private fun Activity.rememberDisplayCutoutMode() {
+    val decorView = window.decorView
+    // WebAppActivityFeature enters on every onResume without leaving, so keep the mode from the first enter.
+    if (decorView.getTag(R.id.mozac_support_ktx_tag_display_cutout_mode) != null) return
+
+    decorView.setTag(R.id.mozac_support_ktx_tag_display_cutout_mode, window.attributes.layoutInDisplayCutoutMode)
+}
+
+/** Returns and clears the mode stored by [rememberDisplayCutoutMode], or `null` when nothing was stored. */
+@RequiresApi(VERSION_CODES.P)
+private fun Activity.takeRememberedDisplayCutoutMode(): Int? =
+    (window.decorView.getTag(R.id.mozac_support_ktx_tag_display_cutout_mode) as? Int)?.also {
+        window.decorView.setTag(R.id.mozac_support_ktx_tag_display_cutout_mode, null)
+    }
 
 /**
  * Applies [mode] to this window's [WindowManager.LayoutParams.layoutInDisplayCutoutMode].
  *
- * No-op when edge-to-edge is enforced: from Android 15 every cutout mode of a non-floating window is treated as
- * [WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS], and
- * [WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_DEFAULT] is deprecated.
+ * No-op when edge-to-edge is enforced: from Android 15 the cutout mode of a non-floating window no longer affects how
+ * it is laid out.
  */
 @RequiresApi(VERSION_CODES.P)
 private fun Activity.setLegacyDisplayCutoutMode(mode: Int) {

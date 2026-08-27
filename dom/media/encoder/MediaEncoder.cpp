@@ -898,16 +898,23 @@ void MediaEncoder::MaybeExtractOrGatherBlob() {
         ("MediaEncoder {} Muxed {:.2f}s of data since last "
          "blob. Issuing new blob.",
          fmt::ptr(this), (muxedEndTime - mLastBlobTime).ToSeconds()));
-    RequestData()->Then(mEncoderThread, __func__,
-                        [this, self = RefPtr<MediaEncoder>(this)](
-                            const BlobPromise::ResolveOrRejectValue& aValue) {
-                          if (aValue.IsReject()) {
-                            SetError();
-                            return;
-                          }
-                          RefPtr<BlobImpl> blob = aValue.ResolveValue();
-                          mDataAvailableEvent.Notify(std::move(blob));
-                        });
+    // Always dispatch the result to the main thread, to keep in sync with other
+    // callers like MediaRecorder::Session::DoSessionEndTask, which dispatches
+    // the result directly to the main thread. If we don't the blobs can arrive
+    // out of order.
+    RequestData()->Then(
+        mMainThread, __func__,
+        [this, self = RefPtr<MediaEncoder>(this)](
+            const BlobPromise::ResolveOrRejectValue& aValue) {
+          if (aValue.IsReject()) {
+            MOZ_ALWAYS_SUCCEEDS(mEncoderThread->Dispatch(NS_NewRunnableFunction(
+                "MediaEncoder::SetError",
+                [self = RefPtr<MediaEncoder>(this)] { self->SetError(); })));
+            return;
+          }
+          RefPtr<BlobImpl> blob = aValue.ResolveValue();
+          mDataAvailableEvent.Notify(std::move(blob));
+        });
   }
 
   if (muxedEndTime - mLastExtractTime > TimeUnit::FromSeconds(1)) {

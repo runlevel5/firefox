@@ -25,6 +25,7 @@ ChromeUtils.defineESModuleGetters(lazy, {
 /** @typedef {import("moz-src:///browser/components/aiwindow/ui/modules/SmartFormFillDocument.sys.mjs").SmartFormFillDocument} SmartFormFillDocument */
 /** @typedef {import("moz-src:///browser/components/aiwindow/ui/modules/SmartFormFillDocument.sys.mjs").FormData} FormData */
 /** @typedef {import("moz-src:///browser/components/aiwindow/ui/modules/SmartFormFillDocument.sys.mjs").FocusedForm} FocusedForm */
+/** @typedef {import("moz-src:///browser/components/aiwindow/ui/modules/SmartFormFillDocument.sys.mjs").FieldOutcomes} FieldOutcomes */
 
 /**
  * @typedef {{
@@ -150,7 +151,11 @@ export class SmartFormFillChild extends JSWindowActorChild {
     }
 
     this.#smartFormFillDocument = new lazy.SmartFormFillDocument(this.document);
-    await this.#smartFormFillDocument.initialize(this.#onFormUpdate.bind(this));
+    await this.#smartFormFillDocument.initialize(
+      this.#onFormUpdate.bind(this),
+      this.#onFieldOutcomes.bind(this),
+      this.#onFieldsFilled.bind(this)
+    );
     this.#registerAutocompleteFields();
   }
 
@@ -325,5 +330,35 @@ export class SmartFormFillChild extends JSWindowActorChild {
    */
   get actorName() {
     return "SmartFormFill";
+  }
+
+  /**
+   * Callback for SmartFormFillDocument to use when the fill of one or more
+   * fields ends
+   *
+   * @param {FieldOutcomes} outcomes
+   */
+  #onFieldOutcomes(outcomes) {
+    if (this.#destroyed) {
+      return;
+    }
+
+    this.sendAsyncMessage("SmartFormFill:FieldOutcomes", outcomes);
+  }
+
+  /**
+   * Reports which fields a fill wrote to, so the parent can record what the
+   * model decided for each of them. Pushed rather than returned from the fill
+   * itself: the page is the only side that knows what it wrote, and filling
+   * stays a message the parent does not wait on.
+   *
+   * @param {{ id: string, fieldIds: Array<string> }} filled
+   */
+  #onFieldsFilled(filled) {
+    if (this.#destroyed) {
+      return;
+    }
+
+    this.sendAsyncMessage("SmartFormFill:FieldsFilled", filled);
   }
 }

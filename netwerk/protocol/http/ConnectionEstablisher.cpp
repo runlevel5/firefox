@@ -261,7 +261,7 @@ nsresult ConnectionEstablisher::ActivateConnectionWithTransaction(
   mTransaction->SetConnectedCallback(
       [self = RefPtr{this},
        onActivated = std::move(aOnActivated)](nsresult aResult) {
-        NS_DispatchToCurrentThread(NS_NewRunnableFunction(
+        DispatchToCurrent(NS_NewRunnableFunction(
             "ConnectionEstablisher::ActivateCallback",
             [self, aResult, onActivated = std::move(onActivated)]() {
               if (NS_FAILED(aResult)) {
@@ -598,6 +598,11 @@ nsresult TCPConnectionEstablisher::CreateAndConfigureSocketTransport() {
   socketTransport->SetConnectionFlags(tmpFlags);
   socketTransport->SetTlsFlags(mConnInfo->GetTlsFlags());
   socketTransport->SetOriginAttributes(mConnInfo->GetOriginAttributes());
+  // Must match DnsAndConnectSocket::TransportSetup::SetupStreams: without this
+  // TRR sockets established through Happy Eyeballs are not marked, so neither
+  // nsSocketEvent::GetPriority nor the socket thread's TRR-first servicing sees
+  // them.
+  socketTransport->SetIsTRRConnection(mConnInfo->GetIsTrrServiceChannel());
 
   socketTransport->SetQoSBits(gHttpHandler->GetQoSBits());
 

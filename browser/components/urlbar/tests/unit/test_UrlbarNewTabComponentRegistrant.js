@@ -24,6 +24,7 @@ async function setFeatureGate(registry, enabled) {
 }
 
 add_task(async function test_featureGate() {
+  UrlbarPrefs.set("newtab.featureGate", false);
   let registry = new AboutNewTabComponentRegistry();
   registerCleanupFunction(() => {
     registry.destroy();
@@ -59,5 +60,42 @@ add_task(async function test_featureGate() {
     searchComponentOf(registry).tagName,
     "content-search-handoff-ui",
     "The handoff search bar comes back once the gate is disabled again"
+  );
+});
+
+add_task(async function test_nimbusRollout() {
+  UrlbarPrefs.set("newtab.featureGate", false);
+  let registry = new AboutNewTabComponentRegistry();
+  registerCleanupFunction(() => {
+    registry.destroy();
+    Services.prefs.clearUserPref("browser.urlbar.newtab.featureGate");
+  });
+
+  Assert.equal(
+    searchComponentOf(registry).tagName,
+    "content-search-handoff-ui",
+    "The handoff search bar is registered while the gate is disabled"
+  );
+
+  let updated = registry.once(AboutNewTabComponentRegistry.UPDATED_EVENT);
+  let unenroll = await UrlbarTestUtils.initNimbusFeature({
+    newtabFeatureGate: true,
+  });
+  await updated;
+
+  Assert.equal(
+    searchComponentOf(registry).tagName,
+    "moz-urlbar",
+    "A Nimbus rollout enables <moz-urlbar> over the disabled pref"
+  );
+
+  updated = registry.once(AboutNewTabComponentRegistry.UPDATED_EVENT);
+  await unenroll();
+  await updated;
+
+  Assert.equal(
+    searchComponentOf(registry).tagName,
+    "content-search-handoff-ui",
+    "The handoff search bar comes back once the rollout ends"
   );
 });

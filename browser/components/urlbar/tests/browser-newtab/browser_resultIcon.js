@@ -54,13 +54,16 @@ add_setup(async function () {
 });
 
 add_task(async function iconLoadsFromItsOwnUrl() {
-  let tab = await openNewTabPage();
+  let tab = await NewtabSearchbarTestUtils.openNewTabPage();
 
-  await searchInNewTabPage(tab.linkedBrowser, "test");
-  let icon = await waitForRowIcon(
+  await NewtabSearchbarTestUtils.promiseAutocompleteResultPopup({
+    browser: tab.linkedBrowser,
+    value: "test",
+  });
+  let icon = await NewtabSearchbarTestUtils.waitForRowIcon(
     tab.linkedBrowser,
     "test suggestion",
-    ({ src }) => src != UrlbarShared.ICON.DEFAULT
+    { notSrc: UrlbarShared.ICON.DEFAULT }
   );
 
   Assert.equal(
@@ -77,7 +80,7 @@ add_task(async function iconLoadsFromItsOwnUrl() {
 // loads the URL under its own content policies, so a scheme it can't load
 // produces no image.
 add_task(async function unexpectedSchemeDoesNotLoad() {
-  let tab = await openNewTabPage();
+  let tab = await NewtabSearchbarTestUtils.openNewTabPage();
 
   for (let [query, iconUrl] of Object.entries({
     javascript: "javascript:alert(1)",
@@ -87,11 +90,14 @@ add_task(async function unexpectedSchemeDoesNotLoad() {
     // eslint-disable-next-line sdl/no-insecure-url
     http: "http://example.com/favicon.ico",
   })) {
-    await searchInNewTabPage(tab.linkedBrowser, query);
-    let icon = await waitForRowIcon(
+    await NewtabSearchbarTestUtils.promiseAutocompleteResultPopup({
+      browser: tab.linkedBrowser,
+      value: query,
+    });
+    let icon = await NewtabSearchbarTestUtils.waitForRowIcon(
       tab.linkedBrowser,
       `${query} suggestion`,
-      ({ src }) => src == iconUrl
+      { src: iconUrl }
     );
     Assert.ok(!icon.loaded, `The page doesn't load ${iconUrl}`);
   }

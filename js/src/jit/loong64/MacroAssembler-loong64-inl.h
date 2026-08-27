@@ -295,6 +295,10 @@ void MacroAssembler::xor32(const Address& src, Register dest) {
   xor32(scratch, dest);
 }
 
+void MacroAssembler::nor32(Imm32 imm, Register src, Register dest) {
+  ma_nor(dest, src, imm);
+}
+
 // ===============================================================
 // Swap instructions
 

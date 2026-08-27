@@ -238,6 +238,7 @@ class FFmpegVideoDecoder<LIBAV_VER>
                                     MediaDataDecoder::DecodedData& aResults);
   bool ReleaseFrameMediaCodec(void* aKey, bool aRender);
   void ReleaseFramesMediaCodec();
+  void ReleaseSurfaceMediaCodec();
   int32_t mTextureAlignment;
   AVBufferRef* mMediaCodecDeviceContext = nullptr;
   // Only used for the SurfaceTexture case

@@ -25,6 +25,8 @@ only-for-build-platforms:
     - win64-shippable/opt
 
 task-defaults:
+    from-deps:
+        copy-attributes: true
     worker-type: t-linux-docker-amd
     worker:
         env:

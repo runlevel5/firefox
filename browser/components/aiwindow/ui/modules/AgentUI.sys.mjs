@@ -20,6 +20,7 @@
  * @property {string} [contextPageUrl] - Current page URL to seed the agent with
  * @property {object} conversation - The active ChatConversation
  * @property {ChromeWindow} [window] - The browser window
+ * @property {boolean} [isFullPage] - True when the smart window is in full page mode
  */
 
 const lazy = {};
@@ -156,22 +157,33 @@ export class AgentUI {
    * @param {string} [context.contextPageUrl] - Url of the page the command was issued from
    * @param {Conversation} context.conversation - The conversation the command was submitted in
    */
-  static async #handleMonitorCommand({ text, contextPageUrl, conversation }) {
+  static async #handleMonitorCommand({
+    text,
+    contextPageUrl,
+    conversation,
+    isFullPage,
+  }) {
     if (!conversation) {
       return;
     }
     const { prompt: condition, raw } = text;
-    const url = contextPageUrl || "";
+    let url = contextPageUrl || "";
     if (raw) {
       const userMessage = conversation.addUserMessage(raw);
       conversation.emit("chat-conversation:message-update", userMessage);
     }
 
     if (!lazy.isAllowedWatchUrl(url)) {
-      conversation.addAssistantWithL10nMessage(
-        "smartwindow-agent-monitor-page-not-watchable"
-      );
-      return;
+      // Full page mode isn't tied to a page, so it will fail as a
+      // "watchable" page, however we still want an empty card to
+      // display in full page mode.
+      if (!isFullPage) {
+        conversation.addAssistantWithL10nMessage(
+          "smartwindow-agent-monitor-page-not-watchable"
+        );
+        return;
+      }
+      url = "";
     }
 
     const monitors = await lazy.MonitorAgent.listMonitors();
@@ -711,6 +723,7 @@ export class AgentUI {
    * @param {string} [context.contextPageUrl] - Current page URL to seed the agent
    * @param {object} context.conversation - The active ChatConversation
    * @param {ChromeWindow} [context.window] - The browser window
+   * @param {boolean} [context.isFullPage] - True when the smart window is in full page mode
    * @returns {boolean} True when the input was recognized and handled as a command
    */
   static tryHandleCommand({
@@ -719,6 +732,7 @@ export class AgentUI {
     contextPageUrl,
     conversation,
     window,
+    isFullPage = false,
   }) {
     if (
       !lazy.MonitorUIUtils.isMonitorRegionSupported() ||
@@ -752,6 +766,7 @@ export class AgentUI {
       contextPageUrl,
       conversation,
       window,
+      isFullPage,
     });
 
     return true;

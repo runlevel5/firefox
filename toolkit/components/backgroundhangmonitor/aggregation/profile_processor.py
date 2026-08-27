@@ -413,21 +413,36 @@ class ProfileProcessor:
         at that node where the frame was inlined. The two differ because
         signatures merge across builds, and a build that inlined a call and one
         that did not produce the same reconstructed stack (bug 2052961), so a
-        node can be inlined some of the time. Ratio is rounded: unrounded
-        floats defeat compression and roughly double the gzipped artifact.
+        node can be inlined some of the time.
+
+        The ratio is not stored per node. It is 1 wherever a node is inlined at
+        all and 0 where it is not, for all but a handful of nodes: on a
+        production day 737 of 3,017,443 differ, 0.02%. So readers derive it
+        from inlineDepth and consult inlineRatioExceptions for the rest, rather
+        than the artifact carrying three million mostly identical numbers. The
+        exceptions are rounded to 2dp; unrounded floats defeat compression.
         """
         depths = thread["inlineDepthByStack"]
         inline_weight = thread["inlineWeightByStack"]
         total_weight = thread["totalWeightByStack"]
         length = stack_table["length"]
 
-        stack_table["inlineDepth"] = [depths.get(i, 0) for i in range(length)]
-        stack_table["inlineRatio"] = [
-            round(inline_weight[i] / total_weight[i], 2)
-            if inline_weight.get(i) and total_weight.get(i)
-            else 0
-            for i in range(length)
-        ]
+        depth_column = [depths.get(i, 0) for i in range(length)]
+        stack_table["inlineDepth"] = depth_column
+
+        exception_stacks = []
+        exception_ratios = []
+        for i in range(length):
+            weight = inline_weight.get(i)
+            total = total_weight.get(i)
+            ratio = round(weight / total, 2) if weight and total else 0
+            if ratio != (1 if depth_column[i] > 0 else 0):
+                exception_stacks.append(i)
+                exception_ratios.append(ratio)
+        stack_table["inlineRatioExceptions"] = {
+            "stack": exception_stacks,
+            "ratio": exception_ratios,
+        }
 
     def process_thread(self, thread):
         string_array = thread["stringArray"]

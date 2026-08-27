@@ -534,21 +534,29 @@ nsresult TRRService::DispatchTRRRequestInternal(TRR* aTrrRequest,
                                                 bool aWithLock) {
   NS_ENSURE_ARG_POINTER(aTrrRequest);
 
-  nsCOMPtr<nsIThread> thread = MainThreadOrTRRThread(aWithLock);
-  if (!thread) {
+  nsCOMPtr<nsIEventTarget> target = MainThreadOrTRRTarget(aWithLock);
+  if (!target) {
     return NS_ERROR_FAILURE;
   }
 
   RefPtr<TRR> trr = aTrrRequest;
-  return thread->Dispatch(trr.forget());
+  return target->Dispatch(trr.forget());
 }
 
-already_AddRefed<nsIThread> TRRService::MainThreadOrTRRThread(bool aWithLock) {
+already_AddRefed<nsIEventTarget> TRRService::MainThreadOrTRRTarget(
+    bool aWithLock) {
   if (XRE_IsSocketProcess() || mDontUseTRRThread) {
-    return do_GetMainThread();
+    nsCOMPtr<nsIEventTarget> mainThread = do_GetMainThread();
+    return mainThread.forget();
   }
 
-  nsCOMPtr<nsIThread> thread = aWithLock ? TRRThread() : TRRThread_locked();
+  if (StaticPrefs::network_trr_parse_on_socket_thread()) {
+    nsCOMPtr<nsIEventTarget> sts = gSocketTransportService;
+    return sts.forget();
+  }
+
+  nsCOMPtr<nsIEventTarget> thread =
+      aWithLock ? TRRThread() : TRRThread_locked();
   return thread.forget();
 }
 

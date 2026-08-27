@@ -2200,6 +2200,28 @@ class MNewIterator : public MUnaryInstruction, public NoTypePolicy::Data {
   bool canRecoverOnBailout() const override { return true; }
 };
 
+class MNewBoundFunction : public MUnaryInstruction, public NoTypePolicy::Data {
+  explicit MNewBoundFunction(MConstant* templateConst)
+      : MUnaryInstruction(classOpcode, templateConst) {
+    setResultType(MIRType::Object);
+    templateConst->setEmittedAtUses();
+  }
+
+ public:
+  INSTRUCTION_HEADER(NewBoundFunction)
+  TRIVIAL_NEW_WRAPPERS
+
+  JSObject* templateObj() const {
+    return &getOperand(0)->toConstant()->toObject();
+  }
+
+  AliasSet getAliasSet() const override { return AliasSet::None(); }
+
+  [[nodiscard]] bool writeRecoverData(
+      CompactBufferWriter& writer) const override;
+  bool canRecoverOnBailout() const override { return true; }
+};
+
 // Represent the content of all slots of an object.  This instruction is not
 // lowered and is not used to generate code.
 class MObjectState : public MVariadicInstruction,

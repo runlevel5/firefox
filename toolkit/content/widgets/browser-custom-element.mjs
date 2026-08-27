@@ -22,8 +22,8 @@ ChromeUtils.defineESModuleGetters(lazy, {
   Finder: "resource://gre/modules/Finder.sys.mjs",
   FinderParent: "resource://gre/modules/FinderParent.sys.mjs",
   PopupAndRedirectBlocker:
-    "resource://gre/actors/PopupAndRedirectBlockingParent.sys.mjs",
-  SelectParentHelper: "resource://gre/actors/SelectParent.sys.mjs",
+    "moz-src:///toolkit/actors/PopupAndRedirectBlockingParent.sys.mjs",
+  SelectParentHelper: "moz-src:///toolkit/actors/SelectParent.sys.mjs",
   RemoteWebNavigation:
     "moz-src:///toolkit/components/remotebrowserutils/RemoteWebNavigation.sys.mjs",
 });

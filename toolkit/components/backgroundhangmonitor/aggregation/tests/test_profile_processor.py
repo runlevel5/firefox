@@ -167,13 +167,22 @@ def test_merge_number_dicts_adds_overlapping_keys():
     assert merge_number_dicts(a, b) == {"x": 1.0, "y": 5.0, "z": 4.0}
 
 
+def _inline_ratio(stack_table, index):
+    """The ratio a reader derives: 1 where inlined, 0 where not, bar exceptions."""
+    exceptions = stack_table["inlineRatioExceptions"]
+    for position, stack in enumerate(exceptions["stack"]):
+        if stack == index:
+            return exceptions["ratio"][position]
+    return 1 if stack_table["inlineDepth"][index] > 0 else 0
+
+
 def _stack_columns(thread):
     """Map each stack node to (funcName, inlineDepth, inlineRatio)."""
     st = thread["stackTable"]
     names = thread["stringArray"]
     func_name = thread["funcTable"]["name"]
     return {
-        names[func_name[st["func"][i]]]: (st["inlineDepth"][i], st["inlineRatio"][i])
+        names[func_name[st["func"][i]]]: (st["inlineDepth"][i], _inline_ratio(st, i))
         for i in range(1, st["length"])
     }
 
@@ -220,10 +229,14 @@ def test_inline_columns_run_parallel_to_the_stack_table():
     )
     st = p.process_into_profile()["threads"][0]["stackTable"]
     assert len(st["inlineDepth"]) == st["length"]
-    assert len(st["inlineRatio"]) == st["length"]
+    # The ratio is derived, so only the deviating nodes are stored and the two
+    # exception arrays stay parallel to each other.
+    exceptions = st["inlineRatioExceptions"]
+    assert len(exceptions["stack"]) == len(exceptions["ratio"])
+    assert len(exceptions["stack"]) < st["length"]
     # Root node carries no frame.
     assert st["inlineDepth"][0] == 0
-    assert st["inlineRatio"][0] == 0
+    assert _inline_ratio(st, 0) == 0
 
 
 if __name__ == "__main__":

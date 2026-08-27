@@ -20,12 +20,10 @@
 interface nsIWinBackgroundTaskRegistrar : nsISupports
 {
   /**
-   * Register a recurring TimeTrigger that activates the background task COM
-   * server identified by aEntryPointClsid. Replaces any existing task with the same name.
+   * Register a recurring TimeTrigger that activates the package's background
+   * task class. Replaces any existing task with the same name.
    *
    * @param aId               Name to register the task under.
-   * @param aEntryPointClsid  CLSID of the COM server activated when the task
-   *                          fires.
    * @param aIntervalMinutes  Recurrence interval in minutes. The Windows
    *                          minimum is 15; smaller values throw.
    *
@@ -33,8 +31,7 @@ interface nsIWinBackgroundTaskRegistrar : nsISupports
    *         with package identity, or on a Windows version older than build
    *         19041).
    */
-  void registerTask(in AString aId, in nsIDRef aEntryPointClsid,
-                    in unsigned long aIntervalMinutes);
+  void registerTask(in AString aId, in unsigned long aIntervalMinutes);
 
   /**
    * Unregister the task previously registered under aId.

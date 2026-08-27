@@ -6,9 +6,7 @@
 
 "use strict";
 
-function escape(browser) {
-  return BrowserTestUtils.synthesizeKey("KEY_Escape", {}, browser);
-}
+const TEST_VALUE = "https://example.com/";
 
 add_setup(async function () {
   await SpecialPowers.pushPrefEnv({
@@ -17,32 +15,38 @@ add_setup(async function () {
 });
 
 add_task(async function escapeWalksBackOut() {
-  let tab = await openNewTabPage();
-  let browser = tab.linkedBrowser;
+  let tab = await NewtabSearchbarTestUtils.openNewTabPage();
 
-  await searchInNewTabPage(browser, "https://example.com/");
-  await waitForResults(browser);
+  // One task, so each Escape and the state it leaves behind stay in the process
+  // holding the bar.
+  await NewtabSearchbarTestUtils.spawn(
+    tab.linkedBrowser,
+    [TEST_VALUE],
+    async value => {
+      let utils = NewtabSearchbarContentTestUtils;
+      await utils.promiseAutocompleteResultPopup({ window: content, value });
 
-  await escape(browser);
-  await TestUtils.waitForCondition(
-    async () => !(await getBarState(browser)).viewOpen,
-    "waiting for the view to close"
-  );
-  let state = await getBarState(browser);
-  Assert.equal(state.value, "https://example.com/", "the value is still there");
-  Assert.ok(state.focused, "the bar keeps focus");
+      let escape = () => EventUtils.synthesizeKey("KEY_Escape", {}, content);
+      let waitFor = (predicate, msg) =>
+        ContentTaskUtils.waitForCondition(
+          () => predicate(utils.getState(content)),
+          msg
+        );
 
-  await escape(browser);
-  await TestUtils.waitForCondition(
-    async () => !(await getBarState(browser)).value,
-    "waiting for the value to revert"
-  );
-  Assert.ok((await getBarState(browser)).focused, "the bar still keeps focus");
+      escape();
+      await waitFor(state => !state.viewOpen, "the view closes");
+      let state = utils.getState(content);
+      Assert.ok(!state.viewVisible, "the view stops being painted");
+      Assert.equal(state.value, value, "the value is still there");
+      Assert.ok(state.focused, "the bar keeps focus");
 
-  await escape(browser);
-  await TestUtils.waitForCondition(
-    async () => !(await getBarState(browser)).focused,
-    "waiting for focus to go back to the page"
+      escape();
+      await waitFor(s => !s.value, "the value reverts");
+      Assert.ok(utils.getState(content).focused, "the bar still keeps focus");
+
+      escape();
+      await waitFor(s => !s.focused, "focus goes back to the page");
+    }
   );
 
   BrowserTestUtils.removeTab(tab);

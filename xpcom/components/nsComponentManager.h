@@ -5,33 +5,27 @@
 #ifndef nsComponentManager_h_
 #define nsComponentManager_h_
 
-#include "PLDHashTable.h"
-#include "mozilla/ArenaAllocator.h"
 #include "mozilla/Attributes.h"
 #include "mozilla/Components.h"
+#include "mozilla/FileLocation.h"
 #include "mozilla/Maybe.h"
 #include "mozilla/MemoryReporting.h"
 #include "mozilla/Module.h"
 #include "mozilla/Monitor.h"
-#include "mozilla/Omnijar.h"
-#include "nsCOMArray.h"
 #include "nsCOMPtr.h"
-#include "nsClassHashtable.h"
+#include "nsHashKeys.h"
 #include "nsIComponentManager.h"
 #include "nsIComponentRegistrar.h"
 #include "nsIFactory.h"
 #include "nsIFile.h"
 #include "nsIInterfaceRequestor.h"
-#include "nsIInterfaceRequestorUtils.h"
 #include "nsIMemoryReporter.h"
 #include "nsIServiceManager.h"
-#include "nsInterfaceHashtable.h"
 #include "nsTArray.h"
 #include "nsTHashMap.h"
 #include "nsWeakReference.h"
 #include "nsXPCOM.h"
 #include "nsXULAppAPI.h"
-#include "prtime.h"
 
 struct nsFactoryEntry;
 struct PRThread;
@@ -178,10 +172,6 @@ class nsComponentManagerImpl final : public nsIComponentManager,
                             EntryWrapper& aEntry, const nsIID& aIID,
                             void** aResult);
 };
-
-#define NS_MAX_FILENAME_LEN 1024
-
-#define NS_ERROR_IS_DIR NS_ERROR_GENERATE_FAILURE(NS_ERROR_MODULE_XPCOM, 24)
 
 struct nsFactoryEntry {
   // nsIComponentRegistrar.registerFactory support

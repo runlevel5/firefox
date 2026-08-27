@@ -29,6 +29,7 @@
 #include "mozilla/TimeStamp.h"
 
 #include "nsPrintfCString.h"
+#include "nsSystemInfo.h"
 #include "nsThreadUtils.h"
 #include "nsThread.h"
 #include "jsfriendapi.h"
@@ -106,6 +107,7 @@
 #ifdef XP_WIN
 #  include <filesystem>
 #endif
+#include <fmt/format.h>
 #include <fstream>
 #include <optional>
 
@@ -1299,6 +1301,108 @@ static bool LaunchCrashHandlerService(const XP_CHAR* aProgramPath,
 
 #endif
 
+nsresult RecordPlatformAnnotations() {
+  // CPU architecture values corresponding to `system_info.cpu_arch` values in
+  // https://github.com/rust-minidump/rust-minidump/blob/main/minidump-processor/json-schema.md,
+  // which is the format expected by Socorro.
+  MOZ_TRY(RecordAnnotationCString(Annotation::CPUArchitecture,
+#if defined(__i386__) || defined(_M_IX86)
+                                  "x86"
+#elif defined(__x86_64__) || defined(_M_X64)
+                                  "amd64"
+#elif defined(__powerpc__) || defined(__POWERPC__) || defined(__ppc__) || \
+    defined(__PPC__)
+                                  "ppc"
+#elif defined(__powerpc64__) || defined(__PPC64__) || defined(__ppc64__)
+                                  "ppc64"
+#elif defined(__sparc__) || defined(__sparc)
+                                  "sparc"
+#elif defined(__arm__)
+                                  "arm"
+#elif defined(__aarch64__) || defined(_M_ARM64)
+                                  "arm64"
+#else
+                                  "unknown"
+#endif
+                                  ));
+
+  // OS values corresponding to `system_info.os` values in
+  // https://github.com/rust-minidump/rust-minidump/blob/main/minidump-processor/json-schema.md,
+  // which is the format expected by Socorro.
+  MOZ_TRY(RecordAnnotationCString(Annotation::OS,
+#if defined(XP_WIN)
+                                  "Windows NT"
+#elif defined(XP_MACOSX)
+                                  "Mac OS X"
+#elif defined(ANDROID)
+                                  "Android"
+#elif defined(XP_IOS)
+                                  "iOS"
+#elif defined(XP_LINUX)
+                                  "Linux"
+#elif defined(XP_SOLARIS)
+                                  "Solaris"
+#else
+                                  "Unknown"
+#endif
+                                  ));
+
+  return NS_OK;
+}
+
+static nsresult RecordCPUInfoAnnotation() {
+  // Run in a background task so we don't block the main thread with
+  // CollectProcessInfo().
+  return NS_DispatchBackgroundTask(
+      NS_NewRunnableFunction("CPUInfoAnnotation", [] {
+        ProcessInfo procinfo = {};
+        if (NS_SUCCEEDED(CollectProcessInfo(procinfo))) {
+          nsCString cpuInfo(fmt::format("family {} model {} stepping {}",
+                                        procinfo.cpuFamily, procinfo.cpuModel,
+                                        procinfo.cpuStepping));
+          RecordAnnotationNSCString(Annotation::CPUInfo, std::move(cpuInfo));
+        }
+      }));
+}
+
+nsresult RecordXPCOMPlatformAnnotations() {
+  nsCOMPtr<nsIPropertyBag2> sysInfo = do_GetService(NS_SYSTEMINFO_CONTRACTID);
+  if (!sysInfo) {
+    NS_WARNING(
+        "expected nsSystemInfo to be available for platform crash annotations");
+    return NS_ERROR_NOT_INITIALIZED;
+  }
+
+  nsCString osVersion;
+  if (NS_SUCCEEDED(sysInfo->GetPropertyAsACString(u"version"_ns, osVersion))) {
+    nsCString build;
+    if (NS_SUCCEEDED(sysInfo->GetPropertyAsACString(u"build"_ns, build))) {
+      osVersion.Append(
+#if defined(XP_WIN)
+          '.'
+#else
+          ' '
+#endif
+      );
+      osVersion.Append(build);
+    }
+    MOZ_TRY(
+        RecordAnnotationNSCString(Annotation::OSVersion, std::move(osVersion)));
+  }
+
+#if defined(XP_LINUX)
+  nsCString lsbDesc;
+  if (NS_SUCCEEDED(sysInfo->GetPropertyAsACString(u"distroDesc"_ns, lsbDesc))) {
+    MOZ_TRY(RecordAnnotationNSCString(
+        CrashReporter::Annotation::LinuxLSBDescription, std::move(lsbDesc)));
+  }
+#endif
+
+  MOZ_TRY(RecordCPUInfoAnnotation());
+
+  return NS_OK;
+}
+
 static void WriteAnnotations(AnnotationWriter& aWriter,
                              const AnnotationTable& aAnnotations) {
   for (auto key : MakeEnumeratedRange(Annotation::Count)) {
@@ -1313,6 +1417,9 @@ static void WriteSynthesizedAnnotations(AnnotationWriter& aWriter) {
   AnnotateMemoryStatus(aWriter);
 }
 
+// WARNING: This function is called from within the exception handler, and must
+// not do things that are unsafe from an exception handler (like allocating
+// memory).
 static void WriteAnnotationsForMainProcessCrash(PlatformWriter& pw,
                                                 const phc::AddrInfo* addrInfo,
                                                 time_t crashTime) {
@@ -2518,7 +2625,7 @@ void MergeCrashAnnotations(AnnotationTable& aDst, const AnnotationTable& aSrc) {
   }
 }
 
-// Adds crash time, uptime and memory report annotations
+// Adds crash time, uptime, and last interaction duration annotations
 static void AddCommonAnnotations(AnnotationTable& aAnnotations) {
   const time_t crashTime = time(nullptr);
   nsAutoCString crashTimeStr;

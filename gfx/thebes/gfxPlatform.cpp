@@ -3088,13 +3088,13 @@ void gfxPlatform::InitHardwareVideoConfig() {
   featureEnc.EnableByDefault();
 
   if (!StaticPrefs::media_hardware_video_encoding_enabled_AtStartup()) {
-    featureDec.UserDisable(
+    featureEnc.UserDisable(
         "User disabled via media.hardware-video-encoding.enabled pref",
         "FEATURE_HARDWARE_VIDEO_ENCODING_PREF_1_DISABLED"_ns);
   }
 #ifdef XP_WIN
   else if (!StaticPrefs::media_wmf_dxva_d3d11_enabled()) {
-    featureDec.UserDisable(
+    featureEnc.UserDisable(
         "User disabled via media.wmf.dxva.d3d11.enabled pref",
         "FEATURE_HARDWARE_VIDEO_ENCODING_PREF_2_DISABLED"_ns);
   }

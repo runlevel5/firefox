@@ -919,7 +919,7 @@ export class UrlbarParentController {
             // Speculative connect only if search suggestions are enabled.
             if (
               (lazy.UrlbarPrefs.get("suggest.searches") ||
-                context.sapName == "searchbar") &&
+                context.isSearchbarSAP) &&
               lazy.UrlbarPrefs.get("browser.search.suggest.enabled")
             ) {
               let engine = lazy.SearchService.getEngineByName(

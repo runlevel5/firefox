@@ -3668,3 +3668,409 @@ add_task(async function test_endSession_records_false_scroll_metrics() {
   Services.prefs.clearUserPref(PREF_TELEMETRY);
   sandbox.restore();
 });
+
+const USER_INTERACTION_ACTIVE = "user-interaction-active-non-synthesized";
+const USER_INTERACTION_INACTIVE = "user-interaction-inactive-non-synthesized";
+// EventStateManager's default notification cadence. The feed takes its cutoff
+// from the notifications themselves, so this only paces the fake ones.
+const USER_INTERACTION_INTERVAL_MS = 5000;
+// testGetValue().sum is in nanoseconds, whatever the time_unit.
+const NS_PER_MS = 1000000;
+
+/**
+ * Build a TelemetryFeed with the clock and the foreground check under the
+ * test's control, and telemetry on so the newtab ping is submitted.
+ *
+ * @param {object} sandbox a sinon sandbox
+ * @returns {object} the instance and a setTime(ms) helper
+ */
+function setupDwellFeed(sandbox) {
+  Services.fog.testResetFOG();
+  Services.prefs.setBoolPref(PREF_TELEMETRY, true);
+
+  let instance = new TelemetryFeed();
+  sandbox.stub(instance, "configureContentPing");
+  sandbox.stub(instance, "isSessionInForeground").returns(true);
+  let clock = sandbox.stub(instance, "now").returns(0);
+
+  return { instance, setTime: ms => clock.returns(ms) };
+}
+
+/**
+ * setupDwellFeed plus one session the user has already seen.
+ *
+ * @param {object} sandbox a sinon sandbox
+ * @returns {object} the instance, its session, and a setTime(ms) helper
+ */
+function setupDwellTest(sandbox) {
+  let ctx = setupDwellFeed(sandbox);
+  ctx.session = ctx.instance.addSession("port1");
+  ctx.session.perf.visibility_event_rcvd_ts = 1;
+  return ctx;
+}
+
+/**
+ * Undo setupDwellFeed.
+ *
+ * @param {object} sandbox the sinon sandbox it was given
+ */
+function teardownDwellTest(sandbox) {
+  sandbox.restore();
+  Services.prefs.clearUserPref(PREF_TELEMETRY);
+  Services.fog.testResetFOG();
+}
+
+/**
+ * End a session and return the dwell_time distribution as the newtab ping saw
+ * it. Read at submission time because testGetValue() alone cannot tell a value
+ * that rode along in the ping from one recorded too late and cleared by the
+ * submit.
+ *
+ * @param {object} instance a TelemetryFeed
+ * @param {string} portID the session to end
+ * @returns {Promise<object|null>} null if no ping carried a sample
+ */
+async function endSessionAndReadDwell(instance, portID) {
+  let dwell = null;
+  GleanPings.newtab.testBeforeNextSubmit(() => {
+    dwell = Glean.newtab.dwellTime.testGetValue("newtab");
+  });
+  await instance.endSession(portID);
+  return dwell;
+}
+
+add_task(async function test_dwell_time_accrues_while_active_and_foreground() {
+  info(
+    "TelemetryFeed should accrue dwell time while the user is interacting " +
+      "and the newtab is in the foreground"
+  );
+  let sandbox = sinon.createSandbox();
+  let { instance, setTime } = setupDwellTest(sandbox);
+
+  // Interaction starts at 0 and continues at 5000. The inactive tick at 10000
+  // says the last interval had no input, so only 0-5000 is credited.
+  instance.observe(null, USER_INTERACTION_ACTIVE, null);
+  setTime(USER_INTERACTION_INTERVAL_MS);
+  instance.observe(null, USER_INTERACTION_ACTIVE, null);
+  setTime(USER_INTERACTION_INTERVAL_MS * 2);
+  instance.observe(null, USER_INTERACTION_INACTIVE, null);
+
+  let dwell = await endSessionAndReadDwell(instance, "port1");
+
+  Assert.ok(dwell, "dwell_time was recorded");
+  Assert.equal(dwell.count, 1, "Exactly one sample per newtab session");
+  Assert.equal(
+    dwell.sum,
+    USER_INTERACTION_INTERVAL_MS * NS_PER_MS,
+    "Credited up to the last notification that said the user was there"
+  );
+
+  teardownDwellTest(sandbox);
+});
+
+add_task(async function test_dwell_time_partial_credit_at_session_end() {
+  info(
+    "TelemetryFeed should credit a session that ends mid-interaction with " +
+      "its real elapsed time, not a whole interval"
+  );
+  let sandbox = sinon.createSandbox();
+  let { instance, setTime } = setupDwellTest(sandbox);
+
+  instance.observe(null, USER_INTERACTION_ACTIVE, null);
+  setTime(1200);
+
+  let dwell = await endSessionAndReadDwell(instance, "port1");
+
+  Assert.ok(dwell, "dwell_time was recorded");
+  Assert.equal(
+    dwell.sum,
+    1200 * NS_PER_MS,
+    "A visit shorter than one interval still records its real duration"
+  );
+
+  teardownDwellTest(sandbox);
+});
+
+add_task(async function test_dwell_time_sums_separate_runs() {
+  info(
+    "TelemetryFeed should add up the separate runs of interaction in one " +
+      "newtab session"
+  );
+  let sandbox = sinon.createSandbox();
+  let { instance, setTime } = setupDwellTest(sandbox);
+
+  instance.observe(null, USER_INTERACTION_ACTIVE, null);
+  setTime(5000);
+  instance.observe(null, USER_INTERACTION_ACTIVE, null);
+  setTime(10000);
+  instance.observe(null, USER_INTERACTION_INACTIVE, null);
+
+  // A long pause, then a second run of the same length.
+  setTime(30000);
+  instance.observe(null, USER_INTERACTION_ACTIVE, null);
+  setTime(35000);
+  instance.observe(null, USER_INTERACTION_ACTIVE, null);
+  setTime(40000);
+  instance.observe(null, USER_INTERACTION_INACTIVE, null);
+
+  let dwell = await endSessionAndReadDwell(instance, "port1");
+
+  Assert.equal(dwell.count, 1, "Still one sample for the session");
+  Assert.equal(
+    dwell.sum,
+    10000 * NS_PER_MS,
+    "Both runs are counted, the idle stretch between them is not"
+  );
+
+  teardownDwellTest(sandbox);
+});
+
+add_task(async function test_dwell_time_stops_when_newtab_leaves_foreground() {
+  info(
+    "TelemetryFeed should stop accruing dwell time once the newtab is no " +
+      "longer the foreground tab, even while the user keeps interacting"
+  );
+  let sandbox = sinon.createSandbox();
+  let { instance, setTime } = setupDwellTest(sandbox);
+
+  instance.observe(null, USER_INTERACTION_ACTIVE, null);
+
+  // The user switches to another tab and carries on interacting there. The
+  // switch is only noticed at the next notification, so this newtab keeps the
+  // interval it was left during.
+  instance.isSessionInForeground.returns(false);
+  setTime(USER_INTERACTION_INTERVAL_MS);
+  instance.observe(null, USER_INTERACTION_ACTIVE, null);
+  setTime(USER_INTERACTION_INTERVAL_MS * 4);
+  instance.observe(null, USER_INTERACTION_ACTIVE, null);
+
+  let dwell = await endSessionAndReadDwell(instance, "port1");
+
+  Assert.equal(
+    dwell.sum,
+    USER_INTERACTION_INTERVAL_MS * NS_PER_MS,
+    "Interaction in another tab is not credited to this newtab"
+  );
+
+  teardownDwellTest(sandbox);
+});
+
+add_task(async function test_dwell_time_absent_when_no_activity() {
+  info(
+    "TelemetryFeed should leave dwell_time absent for a newtab the user " +
+      "never interacted with"
+  );
+  let sandbox = sinon.createSandbox();
+  let { instance, setTime } = setupDwellTest(sandbox);
+
+  setTime(60000);
+
+  Assert.equal(
+    await endSessionAndReadDwell(instance, "port1"),
+    null,
+    "dwell_time is absent, not zero"
+  );
+
+  teardownDwellTest(sandbox);
+});
+
+add_task(async function test_dwell_time_clamped_when_visible_after_cutoff() {
+  info(
+    "TelemetryFeed should credit nothing, rather than negative time, when a " +
+      "newtab becomes visible after the last moment the user was known active"
+  );
+  let sandbox = sinon.createSandbox();
+  let { instance, setTime } = setupDwellFeed(sandbox);
+
+  instance.observe(null, USER_INTERACTION_ACTIVE, null);
+
+  setTime(4000);
+  let session = instance.addSession("port1");
+  instance.saveSessionPerfData("port1", { visibility_event_rcvd_ts: 1 });
+  Assert.equal(session.dwellStartedAt, 4000, "The stopwatch started");
+
+  // The interval that just ended saw no input, so the cutoff is the previous
+  // notification, which predates this newtab becoming visible.
+  setTime(5000);
+  instance.observe(null, USER_INTERACTION_INACTIVE, null);
+  Assert.equal(session.dwellTimeMs, 0, "No negative time was accrued");
+
+  Assert.equal(
+    await endSessionAndReadDwell(instance, "port1"),
+    null,
+    "dwell_time is absent rather than negative"
+  );
+
+  teardownDwellTest(sandbox);
+});
+
+add_task(async function test_dwell_time_only_credits_foreground_session() {
+  info(
+    "TelemetryFeed should credit only the foreground session when several " +
+      "newtabs are open"
+  );
+  let sandbox = sinon.createSandbox();
+  let { instance, setTime } = setupDwellFeed(sandbox);
+
+  let foreground = instance.addSession("port-foreground");
+  foreground.perf.visibility_event_rcvd_ts = 1;
+  let background = instance.addSession("port-background");
+  background.perf.visibility_event_rcvd_ts = 1;
+  instance.isSessionInForeground.callsFake(session => session === foreground);
+
+  instance.observe(null, USER_INTERACTION_ACTIVE, null);
+  setTime(USER_INTERACTION_INTERVAL_MS);
+  instance.observe(null, USER_INTERACTION_ACTIVE, null);
+
+  Assert.equal(
+    await endSessionAndReadDwell(instance, "port-background"),
+    null,
+    "The background session contributes nothing"
+  );
+
+  let dwell = await endSessionAndReadDwell(instance, "port-foreground");
+  Assert.equal(dwell.count, 1, "Only the foreground session recorded a sample");
+  Assert.equal(
+    dwell.sum,
+    USER_INTERACTION_INTERVAL_MS * NS_PER_MS,
+    "Credited to the session the user was actually looking at"
+  );
+
+  teardownDwellTest(sandbox);
+});
+
+add_task(async function test_dwell_time_starts_for_a_newtab_opened_mid_run() {
+  info(
+    "TelemetryFeed should start the stopwatch when a newtab becomes visible " +
+      "during a run of interaction already under way"
+  );
+  let sandbox = sinon.createSandbox();
+  let { instance, setTime } = setupDwellFeed(sandbox);
+
+  // The user is already interacting when the tab opens. The next notification
+  // could be a whole interval away.
+  instance.observe(null, USER_INTERACTION_ACTIVE, null);
+
+  setTime(1000);
+  let session = instance.addSession("port1");
+  instance.saveSessionPerfData("port1", { visibility_event_rcvd_ts: 1 });
+  Assert.equal(
+    session.dwellStartedAt,
+    1000,
+    "The stopwatch started when the newtab became visible"
+  );
+
+  setTime(3000);
+  let dwell = await endSessionAndReadDwell(instance, "port1");
+
+  Assert.equal(
+    dwell.sum,
+    2000 * NS_PER_MS,
+    "Timed from becoming visible, not from the next notification"
+  );
+
+  teardownDwellTest(sandbox);
+});
+
+add_task(async function test_dwell_time_not_recorded_when_telemetry_disabled() {
+  info(
+    "TelemetryFeed should not leave a dwell sample behind when no newtab " +
+      "ping will be submitted for the session"
+  );
+  let sandbox = sinon.createSandbox();
+  let { instance, setTime } = setupDwellTest(sandbox);
+  Services.prefs.setBoolPref(PREF_TELEMETRY, false);
+
+  instance.observe(null, USER_INTERACTION_ACTIVE, null);
+  setTime(3000);
+  await instance.endSession("port1");
+
+  Assert.equal(
+    Glean.newtab.dwellTime.testGetValue("newtab"),
+    null,
+    "Nothing is left in ping-lifetime storage for a later ping to pick up"
+  );
+
+  teardownDwellTest(sandbox);
+});
+
+add_task(async function test_isSessionInForeground() {
+  info(
+    "TelemetryFeed.isSessionInForeground should only accept the selected " +
+      "browser of the focused window"
+  );
+  let sandbox = sinon.createSandbox();
+  let instance = new TelemetryFeed();
+
+  let win = { closed: false, gBrowser: { selectedBrowser: null } };
+  let browser = { documentGlobal: win };
+  win.gBrowser.selectedBrowser = browser;
+  let session = { browserRef: new WeakRef(browser) };
+  sandbox.stub(instance, "getActiveChromeWindow").returns(win);
+
+  Assert.ok(
+    instance.isSessionInForeground(session),
+    "Selected browser of the focused window is in the foreground"
+  );
+
+  instance.getActiveChromeWindow.returns({});
+  Assert.ok(
+    !instance.isSessionInForeground(session),
+    "Not in the foreground when another window has focus"
+  );
+
+  instance.getActiveChromeWindow.returns(win);
+  win.gBrowser.selectedBrowser = { documentGlobal: win };
+  Assert.ok(
+    !instance.isSessionInForeground(session),
+    "Not in the foreground when another tab is selected"
+  );
+
+  win.gBrowser.selectedBrowser = browser;
+  win.closed = true;
+  Assert.ok(
+    !instance.isSessionInForeground(session),
+    "Not in the foreground once the window has closed"
+  );
+
+  win.closed = false;
+  Assert.ok(
+    !instance.isSessionInForeground({}),
+    "A session with no browser is never in the foreground"
+  );
+
+  sandbox.restore();
+});
+
+add_task(async function test_user_interaction_observers_registered() {
+  info(
+    "TelemetryFeed should observe the user interaction topics between init " +
+      "and uninit"
+  );
+  let sandbox = sinon.createSandbox();
+  let instance = new TelemetryFeed();
+
+  instance.init();
+
+  sandbox.stub(instance, "isSessionInForeground").returns(true);
+  sandbox.stub(instance, "now").returns(0);
+  let session = instance.addSession("port1");
+  Services.obs.notifyObservers(null, USER_INTERACTION_ACTIVE);
+  Assert.equal(
+    session.dwellStartedAt,
+    0,
+    "A real notification drives the stopwatch"
+  );
+
+  instance.uninit();
+
+  session.dwellStartedAt = null;
+  Services.obs.notifyObservers(null, USER_INTERACTION_ACTIVE);
+  Assert.equal(
+    session.dwellStartedAt,
+    null,
+    "Notifications no longer reach the feed after uninit"
+  );
+
+  sandbox.restore();
+});

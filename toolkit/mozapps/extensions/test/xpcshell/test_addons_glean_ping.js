@@ -8,8 +8,6 @@ const { ExtensionUtils } = ChromeUtils.importESModule(
   "resource://gre/modules/ExtensionUtils.sys.mjs"
 );
 
-AddonTestUtils.init(this);
-AddonTestUtils.overrideCertDB();
 createAppInfo("xpcshell@tests.mozilla.org", "XPCShell", "1", "1");
 
 add_setup(() => {

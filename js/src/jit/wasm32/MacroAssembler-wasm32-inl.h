@@ -286,6 +286,10 @@ void MacroAssembler::xor32(Imm32 imm, const Address& dest) { MOZ_CRASH(); }
 
 void MacroAssembler::xor32(const Address& src, Register dest) { MOZ_CRASH(); }
 
+void MacroAssembler::nor32(Imm32 imm, Register src, Register dest) {
+  MOZ_CRASH();
+}
+
 void MacroAssembler::byteSwap16SignExtend(Register reg) { MOZ_CRASH(); }
 
 void MacroAssembler::byteSwap16ZeroExtend(Register reg) { MOZ_CRASH(); }

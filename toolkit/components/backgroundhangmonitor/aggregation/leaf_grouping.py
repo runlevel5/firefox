@@ -217,14 +217,15 @@ def _is_grouping_noise(name, lib):
     return name.startswith(_NOISE_PREFIXES)
 
 
-def _grouping_frames(frames):
-    """The meaningful frames of a stack (leaf->root), noise removed.
+def _grouping_positions(frames):
+    """Positions of the meaningful frames of a stack (leaf->root), noise removed.
 
     Falls back to the raw leaf when a stack is entirely noise, so such a hang
-    still buckets (as itself) rather than vanishing.
+    still buckets (as itself) rather than vanishing. Positions rather than the
+    frames themselves so callers can index the parallel funcTable list too.
     """
-    kept = [f for f in frames if not _is_grouping_noise(f[0], f[1])]
-    return kept if kept else [frames[0]]
+    kept = [i for i, f in enumerate(frames) if not _is_grouping_noise(f[0], f[1])]
+    return kept if kept else [0]
 
 
 def _event_loop_depth(frames):
@@ -233,13 +234,14 @@ def _event_loop_depth(frames):
 
 
 def signatures_from_thread(thread):
-    """Fold a thread's samples into per-signature {frames, frameKeys, ms, count}.
+    """Fold a thread's samples into per-signature {frames, frameKeys, stack, ms, count}.
 
     Samples with identical stacks (but differing runnable/annotations/platform,
     which the frontend ignores for signature identity) are summed together, and
     hang ms/count are totalled across every date the thread carries.
     """
     total = thread["sampleTable"]["length"]
+    sample_stack = thread["sampleTable"]["stack"]
 
     ms = [0.0] * total
     count = [0.0] * total
@@ -265,6 +267,9 @@ def signatures_from_thread(thread):
             by_key[key] = {
                 "frames": frames,
                 "frameKeys": frame_keys,
+                # The profile's stackTable already holds this stack; the
+                # artifact points at it rather than repeating the frames.
+                "stack": sample_stack[i],
                 "ms": ms[i],
                 "count": count[i],
             }
@@ -317,23 +322,30 @@ def group_signatures(signatures, min_group_size=DEFAULT_MIN_GROUP_SIZE):
         {
           "displayName": str,
           "leafFrame": [name, lib],            # meaningful leaf (the group id)
-          "commonTrunk": [[name, lib], ...],   # leaf -> branch, shared (meaningful)
           "branchFrame": [name, lib],          # deepest shared meaningful frame
           "memberCount": int,
           "totalMs": float,
           "totalCount": float,
           "avgEventLoopDepth": float,          # mean nested-event-loop depth
-          "members": [
-            {"frameKeys": [funcIndex, ...],      # leaf->root, identifies the member
-             "ms", "count",
-             "variant": int,                     # group-local variant ordinal
-             "firstUniqueFrame": [name, lib] | None},
-            ...                                  # sorted by descending ms
-          ],
+          "members": {                         # parallel arrays, descending ms
+            "stack": [stackIndex, ...],        # into the thread's stackTable
+            "ms": [float, ...],
+            "count": [float, ...],
+            "firstUniqueFunc": [funcIndex | None, ...],
+            "variant": [int, ...],             # group-local variant ordinal
+          },
         }
 
-    `firstUniqueFrame` is the earliest *meaningful* frame that separates a
-    member from its siblings - the real branch point, not a noise frame.
+    A member is identified by `stack`, its node in the thread's stackTable.
+    Walking that node's prefix chain yields the same funcTable indices, and so
+    the same canonical key, the frontend derives for every other signature, so
+    the join still holds byte-for-byte. The stack is stored once in the
+    stackTable and pointed at, rather than respelled per member.
+
+    `firstUniqueFunc` is the funcTable index of the earliest *meaningful* frame
+    that separates a member from its siblings - the real branch point, not a
+    noise frame. It cannot be derived downstream, because picking it requires
+    the noise-prefix list this module owns.
 
     Groups smaller than `min_group_size` are dropped: a signature with no
     near-duplicate is its own row and needs no grouping.
@@ -342,7 +354,9 @@ def group_signatures(signatures, min_group_size=DEFAULT_MIN_GROUP_SIZE):
     for sig in signatures:
         if not sig["frames"]:
             continue
-        sig["_gframes"] = _grouping_frames(sig["frames"])
+        positions = _grouping_positions(sig["frames"])
+        sig["_gframes"] = [sig["frames"][i] for i in positions]
+        sig["_gkeys"] = [sig["frameKeys"][i] for i in positions]
         sig["_eld"] = _event_loop_depth(sig["frames"])
 
     buckets = {}
@@ -363,31 +377,37 @@ def group_signatures(signatures, min_group_size=DEFAULT_MIN_GROUP_SIZE):
         variant_ids = {}
         for member in members:
             gframes = member["_gframes"]
-            first_unique = gframes[trunk_depth] if len(gframes) > trunk_depth else None
+            gkeys = member["_gkeys"]
+            first_unique = gkeys[trunk_depth] if len(gkeys) > trunk_depth else None
             # Members sharing a variant are the same hang differing only in
             # skipped noise frames; the frontend collapses them into one row.
             # The id only has to distinguish variants within this group, so it
             # is a small ordinal rather than the meaningful stack's key.
             variant = variant_ids.setdefault(canonical_key(gframes), len(variant_ids))
-            group_members.append({
-                "frameKeys": member["frameKeys"],
-                "ms": member["ms"],
-                "count": member["count"],
-                "firstUniqueFrame": first_unique,
-                "variant": variant,
-            })
-        group_members.sort(key=lambda m: m["ms"], reverse=True)
+            group_members.append((
+                member["stack"],
+                member["ms"],
+                member["count"],
+                first_unique,
+                variant,
+            ))
+        group_members.sort(key=lambda m: m[1], reverse=True)
 
         groups.append({
             "displayName": _display_name(list(leaf), trunk, len(members)),
             "leafFrame": list(leaf),
-            "commonTrunk": [list(f) for f in trunk],
             "branchFrame": list(trunk[-1]) if trunk else list(leaf),
             "memberCount": len(members),
             "totalMs": sum(m["ms"] for m in members),
             "totalCount": sum(m["count"] for m in members),
             "avgEventLoopDepth": (sum(m["_eld"] for m in members) / len(members)),
-            "members": group_members,
+            "members": {
+                "stack": [m[0] for m in group_members],
+                "ms": [m[1] for m in group_members],
+                "count": [m[2] for m in group_members],
+                "firstUniqueFunc": [m[3] for m in group_members],
+                "variant": [m[4] for m in group_members],
+            },
         })
 
     groups.sort(key=lambda g: g["totalMs"], reverse=True)

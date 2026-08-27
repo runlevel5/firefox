@@ -141,6 +141,7 @@ private fun MarketingData.toOnboardingMarketingData() =
         bodyOneText = bodyLineOneText,
         bodyOneLinkText = bodyLineOneLinkText,
         bodyTwoText = bodyLineTwoText,
+        bodyThreeText = bodyLineThreeText,
     )
 
 private fun CustomizationToolbarData.toOnboardingCustomizeToolbar() =

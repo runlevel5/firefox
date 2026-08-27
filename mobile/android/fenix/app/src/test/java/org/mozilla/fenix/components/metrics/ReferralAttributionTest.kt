@@ -124,6 +124,7 @@ class ReferralAttributionTest {
 
         job.join()
         assertTrue(settings.referralPingSubmitted)
+        assertEquals(REFERRAL_CODE, settings.referralCode)
     }
 
     @Test
@@ -134,5 +135,16 @@ class ReferralAttributionTest {
         ReferralAttribution.submit(REFERRAL_CODE, settings)
 
         assertNull(Referrals.code.testGetValue())
+    }
+
+    @Test
+    fun `GIVEN the ping was already submitted WHEN submitting THEN the code is still recorded locally`() {
+        // Recording is gated on Config.channel.isNightlyOrDebug, which holds under the debug test variant.
+        val settings = Settings(testContext)
+        settings.referralPingSubmitted = true
+
+        ReferralAttribution.submit(REFERRAL_CODE, settings)
+
+        assertEquals(REFERRAL_CODE, settings.referralCode)
     }
 }

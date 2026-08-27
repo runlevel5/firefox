@@ -38,6 +38,7 @@ class AboutHomeBinding(
                         !listOf(
                                 R.id.homeFragment,
                                 R.id.onboardingFragment,
+                                R.id.unlockPrivateTabsFragment,
                                 // Closing a tab in the tabs tray can select an [ABOUT_HOME_URL] tab. Do not
                                 // navigate to the homepage in that case since it would dismiss the tabs tray.
                                 R.id.tabManagementFragment,

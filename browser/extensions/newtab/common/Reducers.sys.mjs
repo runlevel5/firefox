@@ -70,7 +70,7 @@ export const INITIAL_STATE = {
   },
   Prefs: {
     initialized: false,
-    values: { featureConfig: {} },
+    values: { featureConfig: {}, lockedPrefs: [] },
   },
   Dialog: {
     visible: false,

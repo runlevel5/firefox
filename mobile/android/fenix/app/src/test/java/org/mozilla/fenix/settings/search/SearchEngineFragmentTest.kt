@@ -285,6 +285,16 @@ class SearchEngineFragmentTest {
         verify { preferencesEditor.putBoolean(googleLensKey, true) }
     }
 
+    @Test
+    fun `GIVEN an initialised Google Lens preference WHEN it is toggled THEN the widgets are updated`() {
+        val preference = buildGoogleLensPreference()
+        fragment.initialiseGoogleLensPreference(preference)
+
+        preference.callChangeListener(false)
+
+        verify { fragment.updateAllWidgets(testContext) }
+    }
+
     private fun buildGoogleLensPreference(): SwitchWithCaptionPreference {
         val googleLensKey = testContext.getString(R.string.pref_key_google_lens_integration_user_enabled)
         return spyk(SwitchWithCaptionPreference(testContext)) {

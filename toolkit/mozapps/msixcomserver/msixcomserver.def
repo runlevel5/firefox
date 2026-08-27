@@ -3,5 +3,5 @@
 ;+# file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 LIBRARY       msixcomserver.dll
-EXPORTS       DllGetClassObject           PRIVATE
+EXPORTS       DllGetActivationFactory     PRIVATE
               DllCanUnloadNow             PRIVATE

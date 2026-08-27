@@ -2231,8 +2231,10 @@ bool WarpBuilder::buildCallOp(BytecodeLocation loc) {
 
   if (const auto* inliningSnapshot = getOpSnapshot<WarpInlinedCall>(loc)) {
     // Transpile the CacheIR to generate the correct guards before
-    // inlining.  In this case, CacheOp::CallInlinedFunction updates
-    // the CallInfo, but does not generate a call.
+    // inlining.  In this case, the call op (CallInlinedFunction,
+    // CallInlinedBoundFunction, or for monomorphic inlining the un-replaced
+    // CallScriptedFunction/CallBoundScriptedFunction) updates the CallInfo,
+    // but does not generate a call.
     callInfo.markAsInlined();
     if (!transpileCall(loc, inliningSnapshot->cacheIRSnapshot(), &callInfo)) {
       return false;

@@ -5,6 +5,7 @@
 package mozilla.components.lib.crash
 
 import android.content.Intent
+import android.os.Build
 import android.os.Bundle
 import androidx.annotation.StringDef
 import java.io.Serializable
@@ -306,6 +307,20 @@ sealed class Crash {
     }
 
     companion object {
+        /**
+         * The CPU architecture to associate with crashes. This returns a string suitable for the CPUArchitecture crash
+         * annotation.
+         */
+        val CPU_ARCH: String by lazy {
+            when (Build.SUPPORTED_ABIS.getOrNull(0)) {
+                "x86" -> "x86"
+                "x86_64" -> "amd64"
+                "arm64-v8a" -> "arm64"
+                "armeabi-v7a" -> "arm"
+                else -> "unknown"
+            }
+        }
+
         fun fromIntent(intent: Intent): Crash {
             val bundle = intent.getBundleExtra(INTENT_CRASH)!!
 

@@ -80,7 +80,6 @@ struct TextRangeData
   int32_t EndOffset;
 };
 
-[ManualDealloc]
 protocol PDocAccessible
 {
   manager PWindowGlobal;

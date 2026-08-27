@@ -693,6 +693,8 @@ class InstallReferrerWorkerTest {
         // utmContent is the only source for the nimbus ping's
         // install_referrer_response_utm_content and the equivalent JEXL targeting attribute.
         assertEquals("", settings.utmContent)
+        // Recorded for the debug drawer only, and only because unit tests run against the debug build type.
+        assertEquals(REFERRAL_CODE, settings.referralCode)
     }
 
     @Test
@@ -788,6 +790,7 @@ class InstallReferrerWorkerTest {
         worker.handleSuccess(referrer, InstallReferrerClient.InstallReferrerResponse.OK, settings)
 
         job.join()
+        assertEquals("", settings.referralCode)
     }
 
     private fun referralReferrer() =

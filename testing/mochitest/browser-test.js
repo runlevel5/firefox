@@ -348,7 +348,8 @@ function Tester(aTests, structuredLogger, aCallback) {
   window.SpecialPowers.setAsDefaultAssertHandler();
 
   // In the EventUtils scope, as EventUtils reaches for this.ClickChecks to
-  // suppress the checks for synthesized clicks.
+  // suppress the checks for synthesized clicks, and AccessibilityUtils reads
+  // its popup helpers at load time.
   this._scriptLoader.loadSubScript(
     "chrome://mochikit/content/tests/SimpleTest/ClickChecks.js",
     this.EventUtils

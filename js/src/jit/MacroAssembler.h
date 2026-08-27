@@ -1098,6 +1098,8 @@ class MacroAssembler : public MacroAssemblerSpecific {
   inline void or64(const Operand& src, Register64 dest) DEFINED_ON(x64);
   inline void xor64(const Operand& src, Register64 dest) DEFINED_ON(x64);
 
+  inline void nor32(Imm32 imm, Register src, Register dest) PER_SHARED_ARCH;
+
   // ===============================================================
   // Swap instructions
 

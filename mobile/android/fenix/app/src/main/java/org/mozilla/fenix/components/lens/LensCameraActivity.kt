@@ -120,7 +120,7 @@ class LensCameraActivity : AppCompatActivity() {
             if (!qrString.isNullOrEmpty()) {
                 val resultIntent =
                     Intent().apply {
-                        putExtra(QrScanActivity.EXTRA_SCAN_RESULT_DATA, qrString)
+                        putExtra(EXTRA_SCAN_RESULT_DATA, qrString)
                     }
                 setResult(RESULT_OK, resultIntent)
                 finish()
@@ -353,7 +353,7 @@ class LensCameraActivity : AppCompatActivity() {
         }
         val resultIntent =
             Intent().apply {
-                putExtra(QrScanActivity.EXTRA_SCAN_RESULT_DATA, qrString)
+                putExtra(EXTRA_SCAN_RESULT_DATA, qrString)
             }
         setResult(RESULT_OK, resultIntent)
         finish()
@@ -411,6 +411,14 @@ class LensCameraActivity : AppCompatActivity() {
     }
 
     companion object {
+        /**
+         * Result-intent extra key carrying a decoded QR string produced by the in-camera QR mode. Re-exported from
+         * [QrScanActivity] so Lens consumers don't need to depend on the QR component directly, while keeping the value
+         * identical to the key [org.mozilla.fenix.components.QrScanFenixFeature] expects when the intent is forwarded
+         * to it.
+         */
+        const val EXTRA_SCAN_RESULT_DATA = QrScanActivity.EXTRA_SCAN_RESULT_DATA
+
         // Cap the long edge of decoded gallery images before QR analysis. Modern phone photos
         // are 12 MP+ which would allocate ~50 MB as ARGB_8888 plus another ~50 MB for the
         // IntArray pixel copy inside QrAnalyzer — enough to OOM low-RAM devices. ZXing

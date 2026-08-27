@@ -87,6 +87,8 @@ MOZ_SRC_FILES += [
 ]
 
 TESTING_JS_MODULES += [
+    "tests/NewtabSearchbarContentTestUtils.sys.mjs",
+    "tests/NewtabSearchbarTestUtils.sys.mjs",
     "tests/quicksuggest/GeolocationTestUtils.sys.mjs",
     "tests/quicksuggest/MerinoTestUtils.sys.mjs",
     "tests/quicksuggest/QuickSuggestTestUtils.sys.mjs",

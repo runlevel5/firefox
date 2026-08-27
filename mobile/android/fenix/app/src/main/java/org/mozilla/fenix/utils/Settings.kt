@@ -528,6 +528,13 @@ class Settings(
             default = false,
         )
 
+    /** The referral code carried by the install referrer, recorded for display in the debug drawer only. */
+    var referralCode by
+        stringPreference(
+            appContext.getPreferenceKey(R.string.pref_key_referral_code),
+            default = "",
+        )
+
     var rtamoAddonDownloadUrl by
         stringPreference(
             appContext.getPreferenceKey(R.string.pref_key_rtamo_addon_download_url),

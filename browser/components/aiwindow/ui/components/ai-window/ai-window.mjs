@@ -1771,11 +1771,11 @@ export class AIWindow extends MozLitElement {
           contextPageUrl,
           conversation: this.#conversation,
           window: this.#topChromeWindow,
+          isFullPage: this.mode === MODE.FULLPAGE,
         })
       ) {
-        // This command typically renders the monitor chat UI,
-        // However in the full page the command will be blocked by a warning
-        // but we need to update the chat as if communication has started
+        // This command renders the monitor chat UI, so switch to the chat
+        // layout as if communication has started
         if (
           this.mode === MODE.FULLPAGE &&
           !this.classList.contains("chat-active")

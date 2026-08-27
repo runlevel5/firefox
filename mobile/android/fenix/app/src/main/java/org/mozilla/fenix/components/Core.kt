@@ -120,6 +120,7 @@ import org.mozilla.fenix.browser.desktopmode.DefaultDesktopModeRepository
 import org.mozilla.fenix.browser.desktopmode.DesktopModeMiddleware
 import org.mozilla.fenix.components.search.ApplicationSearchMiddleware
 import org.mozilla.fenix.components.search.SearchMigration
+import org.mozilla.fenix.components.search.SearchWidgetMiddleware
 import org.mozilla.fenix.downloads.DownloadService
 import org.mozilla.fenix.ext.components
 import org.mozilla.fenix.ext.isLargeWindow
@@ -379,6 +380,7 @@ class Core(
                 FileUploadsDirCleanerMiddleware(fileUploadsDirCleaner),
                 DesktopModeMiddleware(repository = DefaultDesktopModeRepository(context = context)),
                 ApplicationSearchMiddleware(context),
+                SearchWidgetMiddleware(context),
                 // We are disabling automatically initializing translations so that we can control when
                 // we start this process. For details, see:
                 // https://bugzilla.mozilla.org/show_bug.cgi?id=1958042

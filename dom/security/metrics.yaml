@@ -507,27 +507,6 @@ mixed_content:
     expires: never
     telemetry_mirror: MIXED_CONTENT_PAGE_LOAD
 
-  unblock_counter:
-    type: custom_distribution
-    description: >
-      A simple counter of daily mixed-content unblock operations and top
-      documents loaded
-
-      This metric was generated to correspond to the Legacy Telemetry enumerated
-      histogram MIXED_CONTENT_UNBLOCK_COUNTER.
-    range_min: 0
-    range_max: 3
-    bucket_count: 4
-    histogram_type: linear
-    bugs:
-      - https://bugzilla.mozilla.org/show_bug.cgi?id=1935420
-    data_reviews:
-      - https://bugzilla.mozilla.org/show_bug.cgi?id=1935420
-    notification_emails:
-      - seceng-telemetry@mozilla.com
-    expires: never
-    telemetry_mirror: MIXED_CONTENT_UNBLOCK_COUNTER
-
   hsts:
     type: custom_distribution
     description: >

@@ -5,9 +5,14 @@
 #share-button > .urlbar-icon {
   list-style-image: url("chrome://browser/content/sharing/share-alt.svg");
 
+  /* Match the share icons more closely to the OS share icon */
   @media (-moz-platform: macos) {
     list-style-image: url("chrome://browser/skin/share.svg");
   }
+}
+
+#share-panel {
+  font: caption;
 }
 
 #share-panel-mainView {
@@ -22,7 +27,7 @@
 }
 
 #share-panel-copy-link {
-  list-style-image: url("chrome://global/skin/icons/link.svg");
+  list-style-image: url("chrome://browser/content/sharing/copy-link.svg");
 }
 
 #share-panel-screenshot {
@@ -30,7 +35,7 @@
 }
 
 #share-panel-qr-code {
-  list-style-image: url("chrome://browser/skin/qrcode.svg");
+  list-style-image: url("chrome://browser/content/sharing/qr-code.svg");
 }
 
 #share-panel-send-to-device {
@@ -46,9 +51,14 @@
 }
 
 #share-panel-mail {
-  list-style-image: url("chrome://browser/skin/mail.svg");
+  list-style-image: url("chrome://browser/content/sharing/mail.svg");
 }
 
 #share-panel-os-share {
-  list-style-image: url("chrome://browser/skin/share.svg");
+  list-style-image: url("chrome://browser/content/sharing/share-alt.svg");
+
+  /* Match the share icons more closely to the OS share icon */
+  @media (-moz-platform: macos) {
+    list-style-image: url("chrome://browser/skin/share.svg");
+  }
 }

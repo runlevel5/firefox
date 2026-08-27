@@ -446,7 +446,7 @@ export var SearchUIUtils = {
         : await lazy.SearchService.getDefault();
     }
 
-    let submission = engine.getSubmission(searchText, searchUrlType);
+    let submission = engine.getSubmission(searchText, searchUrlType, sapSource);
 
     // getSubmission can return null if the engine doesn't have a URL
     // for the given response type. This is an error if it occurs, since
@@ -474,7 +474,7 @@ export var SearchUIUtils = {
       window.gBrowser.selectedBrowser,
       engine,
       sapSource,
-      { searchUrlType }
+      { searchUrlType, submission }
     );
   },
 
@@ -555,10 +555,11 @@ export var SearchUIUtils = {
 
 /**
  * A registrant that adds the handoff search bar to about:newtab / about:home.
- * It stands down while `browser.urlbar.newtab.featureGate` is enabled, which
- * puts `<moz-urlbar>` on those pages instead. New Tab admits only one component
- * per type, so both sides have to honor the gate: without this one standing
- * down, whichever registrant the category happens to enumerate first would win.
+ * It stands down while the urlbar's `newtabFeatureGate` Nimbus variable is
+ * enabled, which puts `<moz-urlbar>` on those pages instead. New Tab admits only
+ * one component per type, so both sides have to honor the gate: without this one
+ * standing down, whichever registrant the category happens to enumerate first
+ * would win.
  */
 export class SearchNewTabComponentsRegistrant extends BaseAboutNewTabComponentRegistrant {
   constructor() {
@@ -581,14 +582,14 @@ export class SearchNewTabComponentsRegistrant extends BaseAboutNewTabComponentRe
     lazy.UrlbarPrefs.removeObserver(this);
   }
 
-  onPrefChanged(pref) {
-    if (pref == "newtab.featureGate") {
+  onNimbusChanged(variable) {
+    if (variable == "newtabFeatureGate") {
       this.updated();
     }
   }
 
   getComponents() {
-    if (lazy.UrlbarPrefs.get("newtab.featureGate")) {
+    if (lazy.UrlbarPrefs.get("newtabFeatureGate")) {
       return [];
     }
 

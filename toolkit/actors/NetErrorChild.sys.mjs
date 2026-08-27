@@ -9,7 +9,7 @@ ChromeUtils.defineESModuleGetters(lazy, {
   BrowserUtils: "resource://gre/modules/BrowserUtils.sys.mjs",
 });
 
-import { RemotePageChild } from "resource://gre/actors/RemotePageChild.sys.mjs";
+import { RemotePageChild } from "moz-src:///toolkit/actors/RemotePageChild.sys.mjs";
 
 /**
  * Record a click on the injected "did you mean" alternate-host suggestion

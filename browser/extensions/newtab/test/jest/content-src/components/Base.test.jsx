@@ -2116,3 +2116,151 @@ describe("<BaseContent> five column gate", () => {
     );
   });
 });
+
+describe("<Base> wallpaper attribution", () => {
+  const ATTRIBUTED_WALLPAPER = {
+    title: "photo-hills",
+    wallpaperUrl: "https://example.com/hills.avif",
+    attribution: {
+      name: { string: "Ada Lovelace", url: "https://example.com/ada" },
+      webpage: { string: "example.com", url: "https://example.com" },
+    },
+  };
+
+  const PLAIN_WALLPAPER = { title: "solid-blue", solid_color: "#0000ff" };
+
+  // Mounting runs updateWallpaper, which writes to the shared jsdom body.
+  afterEach(() => {
+    document.body.style.removeProperty("--newtab-wallpaper");
+    document.body.style.removeProperty("--newtab-wallpaper-color");
+    document.body.style.removeProperty("--newtab-wallpaper-backgroundPosition");
+    document.body.classList.remove("lightWallpaper", "darkWallpaper");
+  });
+
+  function renderWithWallpaper({ prefs = {}, wallpapers = {} } = {}) {
+    return render(
+      <Provider
+        store={makeStore(
+          {
+            "nova.enabled": true,
+            "newtabWallpapers.enabled": true,
+            "newtabWallpapers.user.enabled": true,
+            "newtabWallpapers.wallpaper": ATTRIBUTED_WALLPAPER.title,
+            ...prefs,
+          },
+          {
+            Wallpapers: {
+              ...INITIAL_STATE.Wallpapers,
+              wallpaperList: [ATTRIBUTED_WALLPAPER, PLAIN_WALLPAPER],
+              ...wallpapers,
+            },
+          }
+        )}
+      >
+        <ConnectedBase />
+      </Provider>
+    );
+  }
+
+  it("renders the attribution under Nova when the wallpaper credits a photographer", () => {
+    const { container } = renderWithWallpaper();
+
+    const attribution = container.querySelector(".wallpaper-attribution");
+    expect(attribution).toBeInTheDocument();
+    expect(attribution).toHaveAttribute(
+      "data-l10n-id",
+      "newtab-wallpaper-attribution"
+    );
+    expect(JSON.parse(attribution.getAttribute("data-l10n-args"))).toEqual({
+      author_string: "Ada Lovelace",
+      author_url: "https://example.com/ada",
+      webpage_string: "example.com",
+      webpage_url: "https://example.com",
+    });
+  });
+
+  // Screen reader parity with classic, which also puts the attribution in the
+  // main landmark. Asserting on lastElementChild rather than a descendant match
+  // so a move into .content fails here: _Grid.scss gives every direct child of
+  // .content inline-size containment, which collapses the credit to its padding.
+  it("renders the attribution as the last child of the Nova main landmark", () => {
+    const { container } = renderWithWallpaper();
+
+    expect(
+      container.querySelector(".content-main").lastElementChild
+    ).toHaveClass("wallpaper-attribution");
+  });
+
+  it("does not render the attribution under Nova when the user turned wallpapers off", () => {
+    const { container } = renderWithWallpaper({
+      prefs: { "newtabWallpapers.user.enabled": false },
+    });
+
+    expect(
+      container.querySelector(".wallpaper-attribution")
+    ).not.toBeInTheDocument();
+  });
+
+  it("does not render the attribution under Nova when wallpapers are disabled system-wide", () => {
+    const { container } = renderWithWallpaper({
+      prefs: { "newtabWallpapers.enabled": false },
+    });
+
+    expect(
+      container.querySelector(".wallpaper-attribution")
+    ).not.toBeInTheDocument();
+  });
+
+  it("does not render the attribution for a wallpaper that ships no credit", () => {
+    const { container } = renderWithWallpaper({
+      prefs: { "newtabWallpapers.wallpaper": PLAIN_WALLPAPER.title },
+    });
+
+    expect(
+      container.querySelector(".wallpaper-attribution")
+    ).not.toBeInTheDocument();
+  });
+
+  it("does not render the attribution for an uploaded custom wallpaper", () => {
+    const { container } = renderWithWallpaper({
+      prefs: { "newtabWallpapers.wallpaper": "custom" },
+      wallpapers: { uploadedWallpaper: "blob:custom-wallpaper" },
+    });
+
+    expect(
+      container.querySelector(".wallpaper-attribution")
+    ).not.toBeInTheDocument();
+  });
+
+  it("does not render the attribution for a colour from the solid colour picker", () => {
+    const { container } = renderWithWallpaper({
+      prefs: { "newtabWallpapers.wallpaper": "solid-color-picker-#0000ff" },
+    });
+
+    expect(
+      container.querySelector(".wallpaper-attribution")
+    ).not.toBeInTheDocument();
+  });
+
+  it("still renders the attribution in the classic layout", () => {
+    const { container } = renderWithWallpaper({
+      prefs: { "nova.enabled": false },
+    });
+
+    expect(
+      container.querySelector("main.newtab-main .wallpaper-attribution")
+    ).toBeInTheDocument();
+  });
+
+  // The user pref applies to Nova only; classic checks newtabWallpapers.enabled
+  // on its own.
+  it("still renders the attribution in classic when the user pref is off", () => {
+    const { container } = renderWithWallpaper({
+      prefs: { "nova.enabled": false, "newtabWallpapers.user.enabled": false },
+    });
+
+    expect(
+      container.querySelector("main.newtab-main .wallpaper-attribution")
+    ).toBeInTheDocument();
+  });
+});

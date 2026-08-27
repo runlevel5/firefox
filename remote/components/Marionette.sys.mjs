@@ -29,8 +29,8 @@ const SHARED_DATA_IS_BROWSER_AUTOMATION_KEY =
 const PREF_DYNAMIC_START_ENABLED = "remote.experimental.dynamicstart.enabled";
 
 // Complements -marionette flag for starting the Marionette server.
-// We also set this if Marionette is running in order to start the server
-// again after a Firefox restart.
+// We also set this if Marionette is running for browser automation in order to
+// start the server again after a Firefox restart.
 const ENV_ENABLED = "MOZ_MARIONETTE";
 
 // Besides starting based on existing prefs in a profile and a command
@@ -301,7 +301,13 @@ class MarionetteParentProcess {
 
     this.updateWebdriverActiveFlag(true);
 
-    Services.env.set(ENV_ENABLED, "1");
+    // Only set MOZ_MARIONETTE environment variable when using marionette for
+    // regular browser automation. Dynamically starting marionette for tooling
+    // or ai remote control should not set the variable.
+    if (this.#isBrowserAutomation) {
+      Services.env.set(ENV_ENABLED, "1");
+    }
+
     Services.obs.notifyObservers(this, NOTIFY_LISTENING, true);
     lazy.logger.debug("Marionette is listening");
 

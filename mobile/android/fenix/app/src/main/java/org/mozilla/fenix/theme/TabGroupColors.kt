@@ -63,6 +63,19 @@ data class TabGroupColorPalette(
             )
 
         val privatePalette = darkPalette
+
+        val oledPalette =
+            TabGroupColorPalette(
+                yellow = TabGroupColors(primary = NovaColors.Yellow70, onPrimary = NovaColors.Gray20),
+                orange = TabGroupColors(primary = NovaColors.Orange70, onPrimary = NovaColors.Gray20),
+                red = TabGroupColors(primary = NovaColors.Red70, onPrimary = NovaColors.Gray20),
+                pink = TabGroupColors(primary = NovaColors.Pink70, onPrimary = NovaColors.Gray20),
+                purple = TabGroupColors(primary = NovaColors.Violet70, onPrimary = NovaColors.Gray20),
+                blue = TabGroupColors(primary = NovaColors.Blue70, onPrimary = NovaColors.Gray20),
+                cyan = TabGroupColors(primary = NovaColors.Cyan70, onPrimary = NovaColors.Gray20),
+                green = TabGroupColors(primary = NovaColors.Green70, onPrimary = NovaColors.Gray20),
+                grey = TabGroupColors(primary = NovaColors.Gray60, onPrimary = NovaColors.Gray20),
+            )
     }
 }
 

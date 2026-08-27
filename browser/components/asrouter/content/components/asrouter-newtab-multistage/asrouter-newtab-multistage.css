@@ -4522,6 +4522,10 @@ html {
   inset-inline-start: 0;
   border-inline-start: 1px solid var(--button-border-color);
 }
+.onboardingContainer .split-button-container .submenu-button .fxms-multi-stage-submenu,
+.onboardingContainer .screen .action-buttons .split-button-container .submenu-button .fxms-multi-stage-submenu {
+  text-align: start;
+}
 .onboardingContainer .split-button-container > button:is(:focus-visible, :hover, [open]) + .submenu-button::before,
 .onboardingContainer .split-button-container > .submenu-button:is(:focus-visible, :hover, [open])::before,
 .onboardingContainer .screen .action-buttons .split-button-container > button:is(:focus-visible, :hover, [open]) + .submenu-button::before,

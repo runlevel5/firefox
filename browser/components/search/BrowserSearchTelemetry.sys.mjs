@@ -18,7 +18,7 @@ const lazy = XPCOMUtils.declareLazy({
 });
 
 /**
- * @import {SearchEngine} from "moz-src:///toolkit/components/search/SearchEngine.sys.mjs"
+ * @import {SearchSubmissionData, SearchEngine} from "moz-src:///toolkit/components/search/SearchEngine.sys.mjs"
  */
 
 /**
@@ -169,6 +169,9 @@ class BrowserSearchTelemetryHandler {
    * @param {Values<typeof lazy.SearchUtils.URL_TYPE>} [details.searchUrlType=undefined]
    *        A `SearchUtils.URL_TYPE` value that indicates the type of search.
    *        Defaults to `SearchUtils.URL_TYPE.SEARCH`, a plain old search.
+   * @param {SearchSubmissionData} [details.submission]
+   *        Submission details used for this event. This is used for recording
+   *        specific details to telemetry.
    * @throws if source is not in the known sources list.
    */
   recordSearch(browser, engine, source, details = {}) {
@@ -195,9 +198,11 @@ class BrowserSearchTelemetryHandler {
         );
       }
 
+      let legacyTelemetryId =
+        details.submission?.telemetryId ?? engine.telemetryId;
       if (source != "contextmenu_visual") {
-        const countIdPrefix = `${engine.telemetryId}.`;
-        const countIdSource = countIdPrefix + this.KNOWN_SEARCH_SOURCES[source];
+        let countIdPrefix = `${legacyTelemetryId}.`;
+        let countIdSource = countIdPrefix + this.KNOWN_SEARCH_SOURCES[source];
 
         // NOTE: When removing the sap.deprecatedCounts telemetry, see the note
         // above KNOWN_SEARCH_SOURCES.
@@ -222,13 +227,16 @@ class BrowserSearchTelemetryHandler {
       let searchUrlType =
         details.searchUrlType ?? lazy.SearchUtils.URL_TYPE.SEARCH;
 
+      let partnerCodeToUse = details.submission
+        ? details.submission.partnerCode
+        : engine.partnerCode;
       // Strict equality is used because we want to only match against the
       // empty string and not other values. We would have `engine.partnerCode`
       // return `undefined`, but the XPCOM interfaces force us to return an
       // empty string.
       let reportPartnerCode =
         !isOverridden &&
-        engine.partnerCode !== "" &&
+        partnerCodeToUse !== "" &&
         !engine.getURLOfType(searchUrlType)?.excludePartnerCodeFromTelemetry;
 
       Glean.sap.counts.record({
@@ -238,7 +246,7 @@ class BrowserSearchTelemetryHandler {
         provider_name: engine.name,
         // If no code is reported, we must returned undefined, Glean will then
         // not report the field.
-        partner_code: reportPartnerCode ? engine.partnerCode : undefined,
+        partner_code: reportPartnerCode ? partnerCodeToUse : undefined,
         overridden_by_third_party: isOverridden.toString(),
       });
 
@@ -266,7 +274,7 @@ class BrowserSearchTelemetryHandler {
         Glean.newtabSearch.issued.record({
           newtab_visit_id: details.newtabSessionId,
           search_access_point: source,
-          telemetry_id: engine.telemetryId,
+          telemetry_id: legacyTelemetryId,
         });
         lazy.SearchSERPTelemetry.recordBrowserNewtabSession(
           browser,

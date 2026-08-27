@@ -4,9 +4,16 @@
 
 package org.mozilla.fenix.pdf
 
+import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.text.input.TextFieldState
+import androidx.compose.foundation.text.input.clearText
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.ComposeView
 import androidx.coordinatorlayout.widget.CoordinatorLayout
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -22,6 +29,7 @@ import mozilla.telemetry.glean.private.NoExtras
 import org.mozilla.fenix.GleanMetrics.PdfViewer
 import org.mozilla.fenix.components.share.createPdfShareAction
 import org.mozilla.fenix.pdf.ui.PdfTools
+import org.mozilla.fenix.pdf.ui.SignatureDialog
 import org.mozilla.fenix.theme.FirefoxTheme
 
 /**
@@ -39,6 +47,27 @@ class PdfToolsIntegration(
 ) : LifecycleAwareFeature {
 
     private var pdfTools: ComposeView? = null
+    private var isSigning by mutableStateOf(false)
+    private val signature = TextFieldState()
+
+    internal val signatureState: SignatureState
+        get() = SignatureState(isSigning = isSigning, signature = signature)
+
+    internal val toolActions =
+        PdfToolActions(
+            onSignClick = ::handleSignClick,
+            onDownloadClick = ::handleDownloadClick,
+            onPrintClick = ::handlePrintClick,
+            onShareClick = ::handleShareClick,
+        )
+
+    internal val signatureActions =
+        SignatureActions(
+            onClearClick = ::handleSignClearClick,
+            onAddClick = ::handleSignAddClick,
+            onCloseClick = ::handleSignCloseClick,
+            onPdfGone = ::handlePdfGone,
+        )
 
     override fun start() {
         if (pdfTools != null) {
@@ -72,6 +101,35 @@ class PdfToolsIntegration(
         pdfTools = null
     }
 
+    /** Opens the dialog for adding a signature to the PDF. */
+    internal fun handleSignClick() {
+        isSigning = true
+    }
+
+    /** Erases the signature that was typed. */
+    internal fun handleSignClearClick() {
+        signature.clearText()
+    }
+
+    /** Adds the typed signature to the PDF and closes the dialog. */
+    internal fun handleSignAddClick() {
+        isSigning = false
+        signature.clearText()
+        // Bug 2061298 will make the behavior available.
+    }
+
+    /** Closes the dialog and discards the signature. */
+    internal fun handleSignCloseClick() {
+        isSigning = false
+        signature.clearText()
+    }
+
+    /** Clears out the state if the user navigates away. */
+    internal fun handlePdfGone() {
+        isSigning = false
+        signature.clearText()
+    }
+
     /** Saves the PDF the selected tab is displaying to the device. */
     internal fun handleDownloadClick() {
         PdfViewer.downloadTapped.record(NoExtras())
@@ -103,9 +161,9 @@ class PdfToolsIntegration(
             PdfToolsContent(
                 browserStore = browserStore,
                 isLargeWindow = AcornWindowSize.isLargeWindow(),
-                onDownloadClick = ::handleDownloadClick,
-                onPrintClick = ::handlePrintClick,
-                onShareClick = ::handleShareClick,
+                signatureState = signatureState,
+                signatureActions = signatureActions,
+                toolActions = toolActions,
             )
         }
     }
@@ -116,34 +174,49 @@ class PdfToolsIntegration(
  *
  * @param browserStore Used to observe the PDF status of the selected tab.
  * @param isLargeWindow Used to determine if the device should be treated as a tablet.
- * @param onDownloadClick Invoked when the user activates the download PDF button.
- * @param onPrintClick Invoked when the user activates the print PDF button.
- * @param onShareClick Invoked when the user activates the share PDF button.
+ * @param signatureState The signature being typed.
+ * @param signatureActions The actions available on the signature dialog.
+ * @param toolActions The actions available on the PDF tools themselves.
  */
 @Composable
 internal fun PdfToolsContent(
     browserStore: BrowserStore,
     isLargeWindow: Boolean,
-    onDownloadClick: () -> Unit,
-    onPrintClick: () -> Unit,
-    onShareClick: () -> Unit,
+    signatureState: SignatureState,
+    signatureActions: SignatureActions,
+    toolActions: PdfToolActions,
 ) {
-    val isPdf by remember {
-        browserStore.stateFlow.map { it.isSelectedTabPdf }.distinctUntilChanged()
+    val pdfTabId by remember {
+        browserStore.stateFlow.map { it.selectedPdfTabId }.distinctUntilChanged()
     }
-        .collectAsStateWithLifecycle(initialValue = browserStore.state.isSelectedTabPdf)
+        .collectAsStateWithLifecycle(initialValue = browserStore.state.selectedPdfTabId)
 
-    if (isPdf) {
-        PdfTools(
-            isLargeWindow = isLargeWindow,
-            // Bug 2054910
-            onSignClick = {},
-            onDownloadClick = onDownloadClick,
-            onPrintClick = onPrintClick,
-            onShareClick = onShareClick,
-        )
+    if (pdfTabId != null) {
+        val onPdfGone by rememberUpdatedState(signatureActions.onPdfGone)
+        DisposableEffect(pdfTabId) {
+            onDispose { onPdfGone() }
+        }
+
+        if (signatureState.isSigning) {
+            BackHandler(onBack = signatureActions.onCloseClick)
+
+            SignatureDialog(
+                state = signatureState.signature,
+                onCloseClick = signatureActions.onCloseClick,
+                onClearClick = signatureActions.onClearClick,
+                onAddClick = signatureActions.onAddClick,
+            )
+        } else {
+            PdfTools(
+                isLargeWindow = isLargeWindow,
+                onSignClick = toolActions.onSignClick,
+                onDownloadClick = toolActions.onDownloadClick,
+                onPrintClick = toolActions.onPrintClick,
+                onShareClick = toolActions.onShareClick,
+            )
+        }
     }
 }
 
-private val BrowserState.isSelectedTabPdf: Boolean
-    get() = selectedTab?.content?.isPdf == true
+private val BrowserState.selectedPdfTabId: String?
+    get() = selectedTab?.takeIf { it.content.isPdf }?.id

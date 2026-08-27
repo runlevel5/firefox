@@ -8,12 +8,12 @@ import {
 } from "moz-src:///browser/components/newtab/AboutNewTabComponents.sys.mjs";
 import { UrlbarPrefs } from "moz-src:///browser/components/urlbar/UrlbarPrefs.sys.mjs";
 
-const FEATURE_GATE_PREF = "newtab.featureGate";
+const FEATURE_GATE = "newtabFeatureGate";
 
 /**
- * A registrant that adds `<moz-urlbar>` to about:newtab / about:home while
- * `browser.urlbar.newtab.featureGate` is enabled. It supersedes the handoff
- * search bar, which stands down for the same pref.
+ * A registrant that adds `<moz-urlbar>` to about:newtab / about:home while the
+ * urlbar's `newtabFeatureGate` Nimbus variable is enabled. It supersedes the
+ * handoff search bar, which stands down for the same gate.
  */
 export class UrlbarNewTabComponentRegistrant extends BaseAboutNewTabComponentRegistrant {
   constructor() {
@@ -27,14 +27,14 @@ export class UrlbarNewTabComponentRegistrant extends BaseAboutNewTabComponentReg
     UrlbarPrefs.removeObserver(this);
   }
 
-  onPrefChanged(pref) {
-    if (pref == FEATURE_GATE_PREF) {
+  onNimbusChanged(variable) {
+    if (variable == FEATURE_GATE) {
       this.updated();
     }
   }
 
   getComponents() {
-    if (!UrlbarPrefs.get(FEATURE_GATE_PREF)) {
+    if (!UrlbarPrefs.get(FEATURE_GATE)) {
       return [];
     }
 

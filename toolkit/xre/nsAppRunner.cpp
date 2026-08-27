@@ -4618,6 +4618,8 @@ int XREMain::XRE_mainInit(bool* aExitFlag,
     CrashReporter::RecordAnnotationNSCString(
         CrashReporter::Annotation::ReleaseChannel, releaseChannel);
 
+    CrashReporter::RecordPlatformAnnotations();
+
 #ifdef XP_WIN
     nsAutoString appInitDLLs;
     if (widget::WinUtils::GetAppInitDLLs(appInitDLLs)) {
@@ -5876,6 +5878,9 @@ nsresult XREMain::XRE_mainRun() {
 
     rv = mScopedXPCOM->SetWindowCreator(mNativeApp);
     NS_ENSURE_SUCCESS(rv, NS_ERROR_FAILURE);
+
+    // Record platform annotations which need XPCOM initialized.
+    CrashReporter::RecordXPCOMPlatformAnnotations();
 
     // tell the crash reporter to also send the release channel
     nsCOMPtr<nsIPrefService> prefs =

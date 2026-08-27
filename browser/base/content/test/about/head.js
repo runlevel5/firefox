@@ -1,6 +1,6 @@
 ChromeUtils.defineESModuleGetters(this, {
   FormHistory: "resource://gre/modules/FormHistory.sys.mjs",
-  NetErrorParent: "resource://gre/actors/NetErrorParent.sys.mjs",
+  NetErrorParent: "moz-src:///toolkit/actors/NetErrorParent.sys.mjs",
   SEARCH_CTA_ACTIONS: "resource://gre/modules/URLKeywordAnalyzer.sys.mjs",
   SEARCH_CTA_REASONS: "resource://gre/modules/URLKeywordAnalyzer.sys.mjs",
   SearchTestUtils: "resource://testing-common/SearchTestUtils.sys.mjs",

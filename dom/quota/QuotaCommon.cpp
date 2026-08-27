@@ -709,5 +709,22 @@ Result<bool, nsresult> WarnIfFileIsUnknown(nsIFile& aFile,
 }
 #endif
 
+Result<bool, nsresult> DatabasePassesIntegrityCheck(
+    mozIStorageConnection& aConnection, IntegrityCheckMode aMode) {
+  const nsLiteralCString pragma = aMode == IntegrityCheckMode::Full
+                                      ? "PRAGMA integrity_check(1);"_ns
+                                      : "PRAGMA quick_check(1);"_ns;
+
+  QM_TRY_INSPECT(
+      const auto& stmt,
+      CreateAndExecuteSingleStepStatement<SingleStepResult::AssertHasResult>(
+          aConnection, pragma));
+
+  QM_TRY_INSPECT(const auto& result, MOZ_TO_RESULT_INVOKE_MEMBER_TYPED(
+                                         nsString, *stmt, GetString, 0));
+
+  return result.EqualsLiteral("ok");
+}
+
 }  // namespace dom::quota
 }  // namespace mozilla

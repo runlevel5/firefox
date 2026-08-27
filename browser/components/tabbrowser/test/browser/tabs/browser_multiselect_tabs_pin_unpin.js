@@ -73,3 +73,29 @@ add_task(async function test() {
   BrowserTestUtils.removeTab(tab2);
   BrowserTestUtils.removeTab(tab3);
 });
+
+add_task(async function test_pin_multiselected_tabs_records_source() {
+  Services.fog.testResetFOG();
+
+  let tab1 = gBrowser.selectedTab;
+  let tab2 = await addTab();
+  await triggerClickOn(tab2, { ctrlKey: true });
+
+  let tab1Pinned = BrowserTestUtils.waitForEvent(tab1, "TabPinned");
+  let tab2Pinned = BrowserTestUtils.waitForEvent(tab2, "TabPinned");
+  await openTabContextMenu(tab2);
+  await BrowserTestUtils.activateMenuItem(
+    document.getElementById("context_pinSelectedTabs")
+  );
+  await tab1Pinned;
+  await tab2Pinned;
+
+  Assert.deepEqual(
+    Glean.pinnedTabs.pin.testGetValue().map(event => event.extra.source),
+    ["tab_menu", "tab_menu"],
+    "Each pinned tab records the surface it was pinned from"
+  );
+
+  gBrowser.unpinTab(tab1);
+  BrowserTestUtils.removeTab(tab2);
+});

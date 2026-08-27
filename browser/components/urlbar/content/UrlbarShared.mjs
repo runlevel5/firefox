@@ -650,6 +650,34 @@ export const UrlbarShared = {
   },
 
   /**
+   * Whether a SAP is an input dedicated to querying a search engine -- the
+   * toolbar search bar and New Tab's -- as opposed to the address bar and its
+   * variants, whose search also covers history and bookmarks.
+   *
+   * @param {string} sapName
+   *   The SAP name to check.
+   * @returns {boolean}
+   *   Whether the SAP is dedicated to search-engine queries.
+   */
+  isSearchbarSAP(sapName) {
+    return sapName == "searchbar" || sapName == "newtab_searchbar";
+  },
+
+  /**
+   * Whether a string that isn't a URL may be searched for. `keyword.enabled`
+   * disambiguates input in a bar that also takes an address, so a search bar
+   * searches whatever the pref says.
+   *
+   * @param {string} sapName
+   *   The SAP name to check.
+   * @returns {boolean}
+   *   Whether a keyword search is enabled.
+   */
+  keywordEnabled(sapName) {
+    return this.isSearchbarSAP(sapName) || UrlbarPrefs.get("keyword.enabled");
+  },
+
+  /**
    * Gets a default icon for a URL.
    *
    * @param {string|URL} url

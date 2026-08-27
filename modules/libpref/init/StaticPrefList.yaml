@@ -1097,22 +1097,15 @@
   value: true
   mirror: always
 
-# Whether to encrypt HTTP disk cache data at rest with an in-memory key. The
-# decrypted cache content only ever lives in memory. Off by default; takes
-# effect on restart. Read via CacheCrypto::IsEnabled(), which caches the value
-# on first use so it is stable for the session.
+# Whether to encrypt HTTP disk cache data at rest. The key is a data encryption
+# key held by the profile keystore (security/lockstore); the decrypted cache
+# content only ever lives in memory. Off by default; takes effect on restart.
+# Read via CacheCrypto::IsEnabled(), which caches the value on first use so it
+# is stable for the session.
 - name: browser.cache.disk.encryption.enabled
   type: RelaxedAtomicBool
   value: false
   mirror: always
-
-# Base64 of the 32-byte AES-256 key used for disk cache encryption. Empty means
-# "generate one on first use and store it here". This is a development scaffold;
-# the key will move to the OS keystore later.
-- name: browser.cache.disk.encryption.key
-  type: String
-  value: ""
-  mirror: never
 
 # Minimum number of unwritten changes before the disk cache index is written
 # back to disk. Lowering it (e.g. to 1) forces the index to be persisted
@@ -2759,6 +2752,12 @@
 # and compositionend events.
 - name: dom.compositionevent.allow_control_characters
   type: bool
+  value: false
+  mirror: always
+
+# Whether to enable large window for brotli on DecompressionStream.
+- name: dom.compression_streams.brotli.large_window.enabled
+  type: RelaxedAtomicBool
   value: false
   mirror: always
 
@@ -13853,10 +13852,11 @@
 # Encoder creation strategy for WebRTC
 # 0: prefer builtin WebRTC encoder (including OpenH264 via GMP)
 # 1: prefer PlatformEncoderModule
+# 2: prefer PlatformEncoderModule for HW, then builtin WebRTC encoder for SW
 - name: media.webrtc.encoder_creation_strategy
   type: RelaxedAtomicUint32
 #ifdef ANDROID
-  value: 1
+  value: 2
 #else
   value: 0
 #endif

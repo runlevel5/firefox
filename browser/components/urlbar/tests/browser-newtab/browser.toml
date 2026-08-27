@@ -2,6 +2,7 @@
 tags = "urlbar"
 support-files = [
   "../browser/head-common.js",
+  "../browser/print_postdata.sjs",
   "head.js",
   "richSuggestionEngine.sjs",
 ]
@@ -10,8 +11,14 @@ prefs = ["browser.urlbar.newtab.featureGate=true"]
 # wrapper, asserts in a debug build. Bug 2065180.
 skip-if = ["debug"]
 
+["browser_blur.js"]
+
 ["browser_escape.js"]
 
 ["browser_pickResult.js"]
 
 ["browser_resultIcon.js"]
+
+["browser_resultMenu.js"]
+
+["browser_searchModeSwitcher.js"]

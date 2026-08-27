@@ -420,12 +420,7 @@
   gen_boilerplate: false
 
 - name: NewBoundFunction
-  arguments:
-    templateObj: JSObject*
-  result_type: Object
-  alias_set: none
-  generate_lir: true
-  lir_temps: 1
+  gen_boilerplate: false
 
 - name: BoundFunctionNumArgs
   operands:

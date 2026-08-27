@@ -2596,8 +2596,7 @@ static void EmitInitDependentStringBase(MacroAssembler& masm,
     //
     //   flags |= ~(flags | ~ATOM_BIT) << (DEPENDED_ON_BIT - ATOM_BIT)
     //
-    masm.or32(Imm32(~StringFlags::ATOM_BIT), temp1, temp2);
-    masm.not32(temp2);
+    masm.nor32(Imm32(~StringFlags::ATOM_BIT), temp1, temp2);
     ShiftFlag32<StringFlags::ATOM_BIT, StringFlags::DEPENDED_ON_BIT>(masm,
                                                                      temp2);
     masm.or32(temp2, temp1);
@@ -10635,12 +10634,14 @@ void CodeGenerator::visitWasmCall(LWasmCall* lir) {
   MOZ_ASSERT(lir->safepoint()->wasmSafepointKind() ==
              WasmSafepointKind::LirCall);
 
-  // Note the assembler offset and framePushed for use by the adjunct
-  // LSafePoint, see visitor for LWasmCallIndirectAdjunctSafepoint below.
+  // Indirect calls (WasmTable/FuncRef) emit two call instructions (fast and
+  // slow path) with two distinct return offsets. The two paths are mutually
+  // exclusive and rejoin with the same live references and frame layout, so a
+  // single stackmap serves both: register this call's LSafepoint a second time
+  // at the slow-path return offset.
   if (callee.which() == wasm::CalleeDesc::WasmTable ||
       callee.which() == wasm::CalleeDesc::FuncRef) {
-    lir->adjunctSafepoint()->recordSafepointInfo(secondRetOffset,
-                                                 framePushedAtStackMapBase);
+    markSafepointAt(secondRetOffset.offset(), lir);
   }
 
   if (reloadInstance) {
@@ -10684,12 +10685,10 @@ void CodeGenerator::visitWasmCall(LWasmCall* lir) {
       tryNote.setTryBodyEnd(masm.currentOffset());
     }
 
-    // This instruction or the adjunct safepoint must be the last instruction
-    // in the block. No other instructions may be inserted.
+    // This instruction must be the last instruction in the block. No other
+    // instructions may be inserted.
     LBlock* block = lir->block();
-    MOZ_RELEASE_ASSERT(*block->rbegin() == lir ||
-                       (block->rbegin()->isWasmCallIndirectAdjunctSafepoint() &&
-                        *(++block->rbegin()) == lir));
+    MOZ_RELEASE_ASSERT(*block->rbegin() == lir);
 
     // Jump to the fallthrough block
     jumpToBlock(lir->mirCatchable()->getSuccessor(
@@ -10856,13 +10855,6 @@ void CodeGenerator::visitWasmCallLandingPrePad(LWasmCallLandingPrePad* lir) {
   // block. The above assertions (and assertions in visitWasmCall) guarantee
   // that we are not skipping over instructions that should be executed.
   tryNote.setLandingPad(block->label()->offset(), masm.framePushed());
-}
-
-void CodeGenerator::visitWasmCallIndirectAdjunctSafepoint(
-    LWasmCallIndirectAdjunctSafepoint* lir) {
-  markSafepointAt(lir->safepointLocation().offset(), lir);
-  lir->safepoint()->setFramePushedAtStackMapBase(
-      lir->framePushedAtStackMapBase());
 }
 
 template <typename InstructionWithMaybeTrapSite>

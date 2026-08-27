@@ -52,12 +52,15 @@ object ReferralAttribution {
     }
 
     /**
-     * Submits [referralCode] on the `referrals` ping, at most once per profile.
+     * Submits [referralCode] on the `referrals` ping, at most once per profile, and records it in [settings] for the
+     * debug drawer.
      *
      * @param referralCode The referral code, with the preamble already stripped.
-     * @param settings Application settings, used to record that the ping has been submitted.
+     * @param settings Application settings, used to record the code and that the ping has been submitted.
      */
     fun submit(referralCode: String, settings: Settings) {
+        settings.referralCode = referralCode
+
         if (settings.referralPingSubmitted) {
             return
         }
