@@ -8,7 +8,7 @@ support VMX optimization for PowerPC970 (PowerMac G5).
 The source codes of the work could be found in following Pull Requests
 
 * [Firefox 153 ESR](https://github.com/runlevel5/firefox-ppc64/pull/2)
-* [Firefox 154 or newer](https://github.com/runlevel5/firefox-ppc64/pull/1)
+* [Firefox 155 or newer](https://github.com/runlevel5/firefox-ppc64/pull/1)
 
 There's been already efforts to upstream the work, please see [proposal](https://bugzilla.mozilla.org/show_bug.cgi?id=1860412).
 While waiting for the work to be reviewed upstream, users and Linux distribution packagers can adopt the [patches](https://github.com/runlevel5/firefox-ppc64/releases) downstream.
